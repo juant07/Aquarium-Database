@@ -63,7 +63,7 @@ Er is niets te installeren; alleen Python 3.12 of lager (het gebruikt de
 | Poort | 8377 (aanpassen: publish-regel in `docker-compose.yml`) |
 | Taal | rechtsboven in de app, of `?lang=en`; keuze wordt een jaar onthouden |
 | Tijdzone | `TZ` in `docker-compose.yml` (bepaalt o.a. de ochtendmelding) |
-| Meldingen | `notify.json` in de datamap (naast `plants.db`), zie hieronder |
+| Meldingen | `notify.json` in de datamap (naast `plants.db`), zie hieronder; `"lang"` kiest NL/EN voor de pushberichten |
 
 #### Meldingen (optioneel)
 
@@ -72,6 +72,7 @@ in de datamap met een ntfy-kanaal:
 
 ```json
 {
+  "lang": "nl",
   "ntfy": { "server": "https://ntfy.sh", "topic": "kies-een-eigen-onderwerp" }
 }
 ```
@@ -80,6 +81,7 @@ of met Home Assistant:
 
 ```json
 {
+  "lang": "nl",
   "ha": {
     "url": "http://192.168.1.10:8123",
     "token": "LONG-LIVED-TOKEN",
@@ -166,7 +168,7 @@ module, which was removed in Python 3.13).
 | Port | 8377 (change the publish line in `docker-compose.yml`) |
 | Language | top right in the app, or `?lang=en`; remembered for a year |
 | Time zone | `TZ` in `docker-compose.yml` (drives the morning digest) |
-| Notifications | `notify.json` in the data folder (next to `plants.db`), see below |
+| Notifications | `notify.json` in the data folder (next to `plants.db`), see below; `"lang"` picks NL/EN for push messages |
 
 #### Notifications (optional)
 
@@ -175,6 +177,7 @@ Everything works without configuration except push notifications. Drop a
 
 ```json
 {
+  "lang": "en",
   "ntfy": { "server": "https://ntfy.sh", "topic": "pick-your-own-topic" }
 }
 ```
@@ -183,6 +186,7 @@ or with Home Assistant:
 
 ```json
 {
+  "lang": "en",
   "ha": {
     "url": "http://192.168.1.10:8123",
     "token": "LONG-LIVED-TOKEN",

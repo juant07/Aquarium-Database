@@ -1,6 +1,9 @@
 AQUARIUMPLANTEN — DATABASE VOOR PLANTEN, VISSEN, METINGEN EN ONDERHOUD
 ======================================================================
 
+Nederlands staat bovenaan, English staat onderaan.
+(The Dutch part is first, the English part is at the bottom.)
+
 Een eenvoudig programma op je eigen computer: geen account, je data blijft
 bij je. Werkt op Windows (.exe) en op elke Raspberry Pi / NAS / Linux-server.
 
@@ -76,10 +79,11 @@ MELDINGEN OP JE GSM (optioneel)
 -------------------------------
 Zonder configuratie werkt de hele app, alleen komen er geen pushberichten.
 Zet naast plants.py (of Aquarium.exe) een bestand notify.json met jouw kanaal.
-Zie notify.json.example in deze map.
+Zie notify.json.example in deze map. Met "lang": "en" zijn de meldingen Engels.
 
 Optie A — via Home Assistant (als je die al hebt):
   {
+    "lang": "nl",
     "ha": {
       "url": "http://192.168.1.10:8123",
       "token": "jouw-long-lived-token",
@@ -92,6 +96,7 @@ Optie A — via Home Assistant (als je die al hebt):
 
 Optie B — via ntfy (gratis, geen account nodig):
   {
+    "lang": "nl",
     "ntfy": {"server": "https://ntfy.sh", "topic": "jouw-eigen-onderwerp"}
   }
   Kies een onderwerp dat nog niemand gebruikt (bijv. aquarium-jan).
@@ -159,4 +164,178 @@ PROBLEMEN
 - Zwart venster sluit direct: start Aquarium.exe vanuit een terminal
   (cmd) om de melding te lezen, of controleer of de app al draait.
 
-Vragen? Zie ook AGENTS.md naast plants.py.
+Vragen? Zie de README op https://github.com/juant07/Aquarium-Database
+
+
+######################################################################
+#                                                                    #
+#   ENGLISH                                                          #
+#                                                                    #
+######################################################################
+
+AQUARIUM PLANTS — DATABASE FOR PLANTS, FISH, MEASUREMENTS AND MAINTENANCE
+=========================================================================
+
+A simple program on your own computer: no account, your data stays with you.
+Works on Windows (.exe) and on any Raspberry Pi / NAS / Linux server.
+
+
+QUICK START (nothing to install)
+--------------------------------
+Latest version: https://github.com/juant07/Aquarium-Database/releases
+
+Double-click Aquarium.exe. Done: the browser opens the app automatically.
+
+The black window has to stay open while you use the app. If you close it,
+the app stops (your data is kept).
+
+When you unzip: ALWAYS extract the whole folder, not single files.
+
+Language: top right you can switch between NL and EN. Your choice is
+remembered.
+
+Not working? See "TROUBLESHOOTING" at the bottom.
+
+
+BUILDING YOUR OWN EXE (source files only)
+-----------------------------------------
+Does the folder contain build_exe.bat? Then you can build your own .exe.
+Requirements: a Windows PC with internet.
+
+1. Install Python 3.11 or 3.12 from https://www.python.org/downloads/
+   Important: tick "Add python.exe to PATH".
+2. Double-click build_exe.bat and wait for "KLAAR: dist\Aquarium.exe".
+3. The folder dist\ then contains Aquarium.exe (+ icon.png and manifest.json).
+   Double-clicking starts the app; Python is no longer needed on that PC.
+   Use Python 3.11 or 3.12; 3.13 does not work with this app.
+
+
+THE APP ON YOUR PHONE OR LAPTOP
+-------------------------------
+1. Start the app on the computer in your home. The black console window
+   shows two lines, for example:
+
+     Planten op http://localhost:8377
+     Vanaf je gsm of laptop: http://192.168.1.50:8377
+
+   The second line is exactly what you need.
+2. Make sure your phone is on the same wifi network as that computer
+   (so not on mobile data / 4G).
+3. Type that address in your phone's browser and you're done.
+4. In the browser: menu -> "Install" / "Add to home screen" to put the app
+   as an icon on your phone or desktop (PWA).
+
+Finding your own IP address (if the black window is already closed):
+  a) Windows: Windows + R, type cmd, Enter, then:   ipconfig
+     Look for "IPv4 Address", e.g. 192.168.1.50.
+  b) Windows without cmd: Settings -> Network & internet -> Properties of
+     your connection -> "IPv4 address".
+  c) Mac: System Settings -> Network.  Raspberry Pi / Linux: ip a
+
+That address comes from your router (dhcp) and can change after a reboot.
+To keep it fixed, reserve a "static address" for that computer in your router.
+
+
+YOUR DATA
+---------
+Next to plants.py (or Aquarium.exe) are two things that YOU own:
+  plants.db      your entire database
+  photos\        the photos you added
+
+Copy those two to a USB stick or NAS now and then as a backup.
+Start over: delete plants.db and start the app again.
+Your data stays on your own device. The program only goes to the internet to
+look up plant/fish information and for notifications.
+
+
+NOTIFICATIONS ON YOUR PHONE (optional)
+--------------------------------------
+Everything works without configuration, you just get no push notifications.
+Put a notify.json file next to plants.py (or Aquarium.exe) with your channel.
+See notify.json.example in this folder. With "lang": "en" the notifications
+are in English (default is Dutch).
+
+Option A — via Home Assistant (if you already have it):
+  {
+    "lang": "en",
+    "ha": {
+      "url": "http://192.168.1.10:8123",
+      "token": "your-long-lived-token",
+      "services": ["mobile_app_your_device"]
+    }
+  }
+  Create the token in Home Assistant: profile -> Security -> Long-lived access
+  tokens -> Create token. Note: that token gives full access to your Home
+  Assistant. Never share that file with anyone else.
+
+Option B — via ntfy (free, no account needed):
+  {
+    "lang": "en",
+    "ntfy": {"server": "https://ntfy.sh", "topic": "your-own-topic"}
+  }
+  Pick a topic nobody else uses (e.g. aquarium-john).
+  Install the "ntfy" app on your phone, choose server ntfy.sh and subscribe
+  to the same topic.
+
+The app notifies you:
+  - as soon as you add or check off a task
+  - every morning around 09:00 with all overdue tasks
+
+
+YOUR OWN SERVER INSTEAD OF WINDOWS (optional)
+---------------------------------------------
+On a Raspberry Pi, NAS or Linux server:
+  python3 plants.py
+and then open http://<ip>:8377
+Nothing to install: it is one file (plants.py).
+
+To start it automatically (systemd), create
+/etc/systemd/system/aquarium.service with:
+  [Unit]
+  Description=Aquariumplanten
+  After=network-online.target
+  [Service]
+  WorkingDirectory=/opt/aquarium
+  ExecStart=/usr/bin/python3 /opt/aquarium/plants.py
+  Restart=always
+  [Install]
+  WantedBy=multi-user.target
+Then: sudo systemctl enable --now aquarium
+(Put plants.py, icon.png and manifest.json in /opt/aquarium.)
+
+
+WITH DOCKER (Debian, Ubuntu, NAS with Docker)
+---------------------------------------------
+1. Install Docker (once):
+     curl -fsSL https://get.docker.com | sudo sh
+2. Put this folder on the server and inside it:
+     mkdir -p data
+     docker compose up -d --build
+   Faster, with the prebuilt image:
+     docker compose pull && docker compose up -d --no-build
+3. Open http://<server-ip>:8377
+
+Your data (plants.db + photos) lives in the "data" folder; that folder is your
+backup. Updating: copy the new files over it and run
+"docker compose up -d --build" again. Your data is kept.
+
+- Not pushing to Home Assistant? Use the IP address of HA in notify.json;
+  names like homeassistant.local do not work inside a container.
+- Put notify.json in the "data" folder (not next to it), with chmod 600.
+- The time zone is set in docker-compose.yml (TZ). If it is wrong, the morning
+  notification arrives at the wrong time.
+
+
+TROUBLESHOOTING
+---------------
+- "Windows protected your PC" / Defender blocks it:
+  right-click the file -> Properties -> tick "Unblock".
+- No connection from the phone:
+  * both on the same wifi (not on 4G),
+  * allow the Windows firewall permission for port 8377,
+  * use the address with the port: http://192.168.1.50:8377
+- "Port 8377 not available": the app is already running. Close the other window.
+- The black window closes immediately: start Aquarium.exe from a terminal
+  (cmd) to read the message, or check whether the app is already running.
+
+Questions? See the README at https://github.com/juant07/Aquarium-Database

@@ -30,12 +30,30 @@ def _digest_vandaag(dag):
 
 
 # ponytail: notify.json stuurt naar HA (long-lived token) en/of ntfy (topic) — bestand weg = stil uit
+NOTIFY_EN = [
+    ("Te laat onderhoud:", "Overdue maintenance:"), (" (nog nooit)", " (never done)"),
+    (" (elke ", " (every "), (" afgevinkt", " checked off"),
+    ("Taak toegevoegd", "Task added"), ("Taak gedaan", "Task done"),
+    ("Aquarium-onderhoud", "Aquarium maintenance"),
+]
+
+
+def _notify_text(s, lang):
+    if lang != "en":
+        return s
+    for nl, en in NOTIFY_EN:
+        s = s.replace(nl, en)
+    return s
+
+
 def notify(bericht, titel="Aquarium"):
     try:
         with open(NOTIFY_CFG) as f:
             cfg = json.load(f)
     except Exception:
         return False
+    lang = str(cfg.get("lang") or "nl").lower()
+    bericht, titel = _notify_text(bericht, lang), _notify_text(titel, lang)
     verzonden = False
     ha = cfg.get("ha") or {}
     if ha.get("token") and ha.get("services"):

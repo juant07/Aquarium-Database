@@ -7,6 +7,8 @@ bij je. Werkt op Windows (.exe) en op elke Raspberry Pi / NAS / Linux-server.
 
 SNEL BEGINNEN (niets installeren)
 ---------------------------------
+Nieuwste versie: https://github.com/juant07/Aquarium-Database/releases
+
 Dubbelklik Aquarium.exe. Klaar: de browser opent vanzelf op de app.
 
 Het zwarte venster moet open blijven zolang je de app gebruikt. Sluit je het

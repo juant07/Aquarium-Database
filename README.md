@@ -40,8 +40,12 @@ docker compose up -d --build
 
 #### Windows
 
-`Aquarium.exe` dubbelklikken (zit in de exe-zip). Zie `instructies.txt`.
-Zelf een exe maken op Windows: `build_exe.bat`.
+Download **`aquarium-exe.zip`** van de
+[releases-pagina](https://github.com/juant07/Aquarium-Database/releases/latest),
+pak hem uit en dubbelklik `Aquarium.exe`. Zie `instructies.txt` voor de rest.
+
+De exe zit bewust **niet** in deze repo (9 MB die bij elke wijziging in de
+git-historie zou belanden). Zelf bouwen op Windows kan met `build_exe.bat`.
 
 #### Linux / Raspberry Pi / NAS
 
@@ -139,8 +143,12 @@ docker compose up -d --build
 
 #### Windows
 
-Double-click `Aquarium.exe` (in the exe zip). See `instructies.txt` (Dutch).
-To build the exe yourself on Windows, use `build_exe.bat`.
+Download **`aquarium-exe.zip`** from the
+[releases page](https://github.com/juant07/Aquarium-Database/releases/latest),
+unzip it and double-click `Aquarium.exe`. See `instructies.txt` (Dutch) for the rest.
+
+The exe is intentionally **not** in this repo (9 MB that would land in the git
+history on every change). To build it yourself on Windows, use `build_exe.bat`.
 
 #### Linux / Raspberry Pi / NAS
 

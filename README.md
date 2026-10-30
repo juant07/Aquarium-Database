@@ -10,6 +10,8 @@ Eenvoudige database voor aquariumplanten, vissen, inspecties, taken en foto's.
 Eén bestand, alleen de Python-standaardbibliotheek, data in SQLite. Geen account,
 geen cloud: alles blijft op je eigen machine. Interface in het Nederlands en Engels.
 
+Broncode: <https://github.com/juant07/Aquarium-Database>
+
 > **Gemaakt met [Opencode](https://opencode.ai) (model Big Pickle)**, een
 > AI-codingassistent. De code is in samenspraak met de eigenaar geschreven en
 > getest op Linux, Windows (via Wine) en in Docker.
@@ -106,6 +108,8 @@ bestand: er staat een token in.
 A small database for aquarium plants, fish, inspections, tasks and photos.
 One file, Python standard library only, data in SQLite. No account, no cloud:
 everything stays on your own machine. Interface available in Dutch and English.
+
+Source: <https://github.com/juant07/Aquarium-Database>
 
 > **Built with [Opencode](https://opencode.ai) (Big Pickle model)**, an
 > AI coding assistant. The code was written in dialogue with the owner and

@@ -16,9 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # GHCR eist een lowercase naam; repository-namen mogen hoofdletters bevatten
+      # Image-naam staat los van de repo-naam (blijft "aquarium"); GHCR eist lowercase
       - id: name
-        run: echo "repo=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -31,7 +31,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ steps.name.outputs.repo }}
+          images: ghcr.io/${{ steps.name.outputs.owner }}/aquarium
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

@@ -187,6 +187,9 @@ form.mini button{margin-top:0}
 .checks{display:flex;gap:.7rem;flex-wrap:wrap;margin:.2rem 0 .4rem}
 .checks label{display:flex;gap:.3rem;align-items:center;margin:0;color:#bcd;font-size:.9rem}
 .lookprev{display:none;margin-top:.5rem;max-height:100px;border-radius:4px}
+.lookfout{display:none;font-size:.8rem;color:#f2b36b;margin-top:.4rem}
+.inst{margin:.3rem 0 1rem}.inst summary{cursor:pointer;color:#9ab;font-size:.85rem}
+.inst form{margin:.5rem 0 0}
 .netopt{display:none}
 .netopt.on{display:flex;gap:.3rem;align-items:center;color:#bcd;font-size:.9rem;margin:.3rem 0}
 .zoekbtn{background:#2a6f9e;margin:0}
@@ -221,6 +224,16 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 </style>
 <h1>@@NAAM@@ <small>@@COUNT@@</small> <span class=lang>@@LANGSW@@</span></h1>
 @@MSG@@
+<details class=inst><summary>Instellingen: zoeksites</summary>
+<form method=post action=/settings>
+<input type=hidden name=tank value=@@TID@@><input type=hidden name=soort value=@@SOORT@@>
+<label>Planten zoeken via (volgorde, kommagescheiden)<input type=text name=plant value="@@SITEPLANT@@"></label>
+<label>Vissen zoeken via (volgorde, kommagescheiden)<input type=text name=vis value="@@SITEVIS@@"></label>
+<label>Aquainfo-URL<input type=text name=url_aquainfo value="@@URL_AQ@@"></label>
+<label>Flowgrow-URL<input type=text name=url_flowgrow value="@@URL_FG@@"></label>
+<button>Opslaan</button>
+<small>Beschikbaar: aquainfo, flowgrow. Lukt een site niet, dan meldt de app dat bij het zoeken.</small>
+</form></details>
 <div class=tabs>@@TABS@@</div>
 <form class=mini method=post action=/add_tank>
 <input type=hidden name=soort value=@@SOORT@@>
@@ -235,6 +248,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label>Aquarium(en)</label><div class=checks>@@TANKCHECKS@@</div>
 <label class=grow>Naam *<input type=text name=naam required autofocus></label>
 <button type=button class=zoekbtn onclick="zoekInfo(this,this.form)">Zoek info</button>
+<div class=lookfout></div>
 <label class=grow>Link<input type=text name=link placeholder=https://...></label>
 <label class=grow>Plaats in bak<input type=text name=plaats placeholder="@@PLAATS@@"></label>
 <label class=grow>Land / herkomst<input type=text name=land></label>
@@ -321,6 +335,8 @@ async function zoekInfo(btn, form){
       if(lab) lab.classList.add('on');
     }
     cardPreview(form, d);
+    const fo=form.querySelector('.lookfout');
+    if(fo){ fo.textContent=(d.fouten||[]).join(' · '); fo.style.display=(d.fouten&&d.fouten.length)?'block':'none'; }
     const ok = n ? (d.link||d.land||d.foto||d.plaats) : (d.naam||d.land||d.foto||d.plaats);
     btn.textContent = ok ? 'Info gevonden'
       : (n ? 'niets gevonden' : 'link niet leesbaar – probeer een andere site of typ de naam');
@@ -360,6 +376,7 @@ CARD = """<div class=card>
 <input type=hidden name=soort value="{soort}">
 <label>Naam</label><input type=text name=naam value="{naam_e}">
 <button type=button class=zoekbtn onclick="zoekInfo(this,this.form)">Zoek info</button>
+<div class=lookfout></div>
 <label>Link</label><input type=text name=link value="{link_e}">
 <label>Plaats</label><input type=text name=plaats value="{plaats_e}">
 <label>Land</label><input type=text name=land value="{land_e}">
@@ -392,6 +409,13 @@ EN_REPL = [
     ("Internetfoto gebruiken", "Use internet photo"),
     ("Zoek in deze lijst op naam...", "Search this list by name..."),
     ("Zoek info", "Find info"),
+    ("Instellingen: zoeksites", "Settings: search sites"),
+    ("Planten zoeken via (volgorde, kommagescheiden)", "Search plants via (order, comma-separated)"),
+    ("Vissen zoeken via (volgorde, kommagescheiden)", "Search fish via (order, comma-separated)"),
+    ("Aquainfo-URL", "Aquainfo URL"),
+    ("Flowgrow-URL", "Flowgrow URL"),
+    ("Beschikbaar: aquainfo, flowgrow. Lukt een site niet, dan meldt de app dat bij het zoeken.",
+     "Available: aquainfo, flowgrow. If a site cannot be searched, the app reports it during the lookup."),
     ("Nieuw aquarium", "New aquarium"),
     ("Water-inspecties", "Water inspections"),
     ("Onderhoudstaken", "Maintenance tasks"),
@@ -444,6 +468,7 @@ T = {
         "every_last": "elke {n} dagen &middot; laatst: {last}",
         "done": "Klaar", "no_tasks": "geen taken — voeg erboven een toe",
         "confirm_del": "Verwijderen?",
+        "bronfout": "kon niet doorzocht worden",
     },
     "en": {
         "plants": "Plants", "fish": "Fish",
@@ -461,6 +486,7 @@ T = {
         "every_last": "every {n} days &middot; last: {last}",
         "done": "Done", "no_tasks": "no tasks — add one above",
         "confirm_del": "Delete?",
+        "bronfout": "could not be searched",
     },
 }
 
@@ -469,6 +495,7 @@ MSG_EN = {
     "Aquarium toegevoegd": "Aquarium added", "Inspectie gelogd": "Inspection logged",
     "Meting verwijderd": "Measurement deleted", "Taak toegevoegd": "Task added",
     "Taak afgevinkt": "Task checked off", "Taak verwijderd": "Task deleted",
+    "Instellingen opgeslagen": "Settings saved", "Opslaan mislukt": "Saving failed",
 }
 
 
@@ -565,6 +592,7 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         f'<a href="/?tank={tid}{qs}&per={per}{ps}&p={pageno}&lang={code}"'
         f'{" class=on" if code == lang else ""}>{code.upper()}</a>'
         for code in ("nl", "en"))
+    bron_urls, bron_order = sites()
     if msg and lang == "en":
         msg = MSG_EN.get(msg, msg)
     msg_html = f'<div id=banner class=banner>{html.escape(msg)}</div>' if msg else ""
@@ -632,6 +660,10 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
                  ("@@PERSEL@@", persel),
                  ("@@PAGER@@", pager),
                  ("@@MSG@@", msg_html),
+                 ("@@SITEPLANT@@", ", ".join(bron_order["plant"])),
+                 ("@@SITEVIS@@", ", ".join(bron_order["vis"])),
+                 ("@@URL_AQ@@", html.escape(bron_urls["aquainfo"], quote=True)),
+                 ("@@URL_FG@@", html.escape(bron_urls["flowgrow"], quote=True)),
                  ("@@INSP@@", "\n".join(insp_html)),
                  ("@@TAKEN@@", "\n".join(taken_html))):
         out = out.replace(k, v)
@@ -663,6 +695,33 @@ UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/124 Safari/537.36"}
 FG = "https://www.flowgrow.de"
 
+# ponytail: zoekbronnen instelbaar via sites.json; ongeldige namen/URL's vallen terug op de default
+SITES_CFG = os.path.join(DATA, "sites.json")
+BRON_URLS = {"aquainfo": "https://aquainfo.nl", "flowgrow": FG}
+BRON_STANDAARD = {"plant": ["flowgrow", "aquainfo"], "vis": ["aquainfo", "flowgrow"]}
+BRON_NAAM = {"aquainfo": "Aquainfo", "flowgrow": "Flowgrow"}
+
+
+def sites():
+    """({"aquainfo": url, ...}, {"plant": [namen], "vis": [namen]}) uit sites.json of default."""
+    try:
+        with open(SITES_CFG) as f:
+            cfg = json.load(f)
+    except Exception:
+        cfg = {}
+    urls = dict(BRON_URLS)
+    for k, v in (cfg.get("urls") or {}).items():
+        if k in urls and isinstance(v, str) and re.match(r"^https?://\S+$", v.strip()):
+            urls[k] = v.strip().rstrip("/")
+    order = {}
+    for soort in ("plant", "vis"):
+        namen = cfg.get(soort)
+        if isinstance(namen, str):
+            namen = namen.split(",")
+        gekozen = [n.strip() for n in (namen or []) if isinstance(n, str) and n.strip() in urls]
+        order[soort] = gekozen or list(BRON_STANDAARD[soort])
+    return urls, order
+
 
 def _get_json(url):
     req = urllib.request.Request(url, headers=UA)
@@ -687,23 +746,21 @@ def _best_slug(slugs, naam):
     return best
 
 
-def _fg_slugs(naam):
-    html_ = _get_text(f"{FG}/db/aquaticplants?{urlencode({'filter[fulltext]': naam})}")
-    return re.findall(r'href="' + FG + r'/db/aquaticplants/([^"#?]+)"', html_)
+def _fg_slugs(naam, root):
+    html_ = _get_text(f"{root}/db/aquaticplants?{urlencode({'filter[fulltext]': naam})}")
+    return re.findall(r'href="' + re.escape(root) + r'/db/aquaticplants/([^"#?]+)"', html_)
 
 
-def flowgrow_info(naam):
-    try:
-        slugs = _fg_slugs(naam) or _fg_slugs(re.split(r"[^A-Za-z0-9]+", naam.strip())[0])
-        slug = _best_slug(sorted(set(slugs)), naam)
-        if not slug:
-            return None, None, None
-        link = f"{FG}/db/aquaticplants/{slug}"
-        page = _get_text(link)
-        m = re.search(r'<meta property="og:image" content="([^"]+)"', page)
-        return link, (m.group(1) if m else None), _plaats(page)
-    except Exception:
+def flowgrow_info(naam, root=FG):
+    root = (root or FG).rstrip("/")
+    slugs = _fg_slugs(naam, root) or _fg_slugs(re.split(r"[^A-Za-z0-9]+", naam.strip())[0], root)
+    slug = _best_slug(sorted(set(slugs)), naam)
+    if not slug:
         return None, None, None
+    link = f"{root}/db/aquaticplants/{slug}"
+    page = _get_text(link)
+    m = re.search(r'<meta property="og:image" content="([^"]+)"', page)
+    return link, (m.group(1) if m else None), _plaats(page)
 
 
 AI = "https://aquainfo.nl"
@@ -721,8 +778,8 @@ def _ai_zone(page):
     return ", ".join(p for p in AI_ZONE_ORDER if p in got) or None
 
 
-def _ai_search(naam, base, pref):
-    return re.findall(r'href="' + AI + r'/' + pref + r'/([a-z0-9\-]+)/?"',
+def _ai_search(naam, base, root, pref):
+    return re.findall(r'href="' + re.escape(root) + r'/' + pref + r'/([a-z0-9\-]+)/?"',
                       _get_text(base + "?" + urlencode({"s": naam})))
 
 
@@ -760,23 +817,58 @@ def _page_info(page):
     return naam, foto, _ai_zone(page), land
 
 
-def fish_info(naam):
-    try:
-        slug = pref = None
-        kort = re.split(r"[^A-Za-z0-9]+", naam.strip())[0]
-        for base, p in ((f"{AI}/en/", "en/article"), (f"{AI}/", "artikel")):
-            slugs = _ai_search(naam, base, p) or _ai_search(kort, base, p)
-            found = _best_slug(sorted(set(slugs)), naam)
-            if found:
-                slug, pref = found, p
-                break
-        if not slug:
-            return None, None, None, None
-        link = f"{AI}/{pref}/{slug}/"
-        _, foto, plaats, land = _page_info(_get_text(link))
-        return link, foto, plaats, land
-    except Exception:
+def fish_info(naam, root=AI):
+    root = (root or AI).rstrip("/")
+    slug = pref = None
+    kort = re.split(r"[^A-Za-z0-9]+", naam.strip())[0]
+    for base, p in ((f"{root}/en/", "en/article"), (f"{root}/", "artikel")):
+        slugs = _ai_search(naam, base, root, p) or _ai_search(kort, base, root, p)
+        found = _best_slug(sorted(set(slugs)), naam)
+        if found:
+            slug, pref = found, p
+            break
+    if not slug:
         return None, None, None, None
+    link = f"{root}/{pref}/{slug}/"
+    _, foto, plaats, land = _page_info(_get_text(link))
+    return link, foto, plaats, land
+
+
+def _bron_aquainfo(naam, url):
+    return fish_info(naam, url)
+
+
+def _bron_flowgrow(naam, url):
+    link, foto, plaats = flowgrow_info(naam, url)
+    return link, foto, plaats, None
+
+
+BRONNEN = {"aquainfo": _bron_aquainfo, "flowgrow": _bron_flowgrow}
+
+
+def _fout(e):
+    if isinstance(e, urllib.error.HTTPError):
+        return f"HTTP {e.code}"
+    if isinstance(e, urllib.error.URLError):
+        return str(e.reason or "netwerk")
+    return type(e).__name__
+
+
+def lookup_bron(naam, soort):
+    """(link, foto, plaats, land), [(bron, reden)] — reden alleen als een site niet doorzocht kon worden."""
+    urls, order = sites()
+    fouten = []
+    for key in order["vis" if soort == "vis" else "plant"]:
+        try:
+            link, foto, plaats, land = BRONNEN[key](naam, urls[key])
+        except Exception as e:
+            fouten.append((BRON_NAAM[key], _fout(e)))
+            continue
+        if link:
+            if not land:
+                land = gbif_land(naam)
+            return (link, foto, plaats, land), fouten
+    return None, fouten
 
 
 def url_info(url):
@@ -893,23 +985,20 @@ class H(BaseHTTPRequestHandler):
             url = (q.get("url", [""])[0]).strip()
             link = land = foto = plaats = nm = None
             img = None
+            fouten = []
             if url:
                 link = url
                 nm, img, plaats, land = url_info(url)
+                if not (nm or img or plaats or land):
+                    fouten.append((urlparse(url).netloc or url[:40],
+                                   T[self._lang()[0]]["bronfout"]))
                 foto = fetch_photo(img) if img else None
             elif naam:
-                if (q.get("soort", [""])[0]).strip() == "vis":
-                    link, img, plaats, land = fish_info(naam)
-                    if not link:
-                        link, img, plaats = flowgrow_info(naam)
-                        land = land or gbif_land(naam)
-                else:
-                    link, img, plaats = flowgrow_info(naam)
-                    land = gbif_land(naam)
-                    if not link:
-                        link, img, plaats, land = fish_info(naam)
+                (link, img, plaats, land), fouten = lookup_bron(
+                    naam, (q.get("soort", [""])[0]).strip())
                 foto = fetch_photo(img) if img else None
-            body = json.dumps({"link": link, "land": land, "foto": foto,
+            fout_html = [f"{b}: {T[self._lang()[0]]['bronfout']} ({r})" for b, r in fouten]
+            body = json.dumps({"link": link, "land": land, "foto": foto, "fouten": fout_html,
                                "plaats": plaats, "naam": nm}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -957,6 +1046,22 @@ class H(BaseHTTPRequestHandler):
         c = db()
         path = urlparse(self.path).path
         g = lambda k: (form.getvalue(k) or "").strip()
+
+        if path == "/settings":
+            plant = [n.strip() for n in g("plant").split(",") if n.strip() in BRON_URLS]
+            vis = [n.strip() for n in g("vis").split(",") if n.strip() in BRON_URLS]
+            urls = {k: g("url_" + k).rstrip("/") for k in BRON_URLS
+                    if re.match(r"^https?://\S+$", g("url_" + k))}
+            try:
+                with open(SITES_CFG, "w") as f:
+                    json.dump({"plant": plant or BRON_STANDAARD["plant"],
+                               "vis": vis or BRON_STANDAARD["vis"], "urls": urls},
+                              f, ensure_ascii=False, indent=1)
+                msg = "Instellingen opgeslagen"
+            except OSError:
+                msg = "Opslaan mislukt"
+            self._redirect(g("tank") or None, g("soort"), msg)
+            return
 
         if path == "/add":
             naam = g("naam")

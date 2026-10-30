@@ -21,6 +21,20 @@ Pak je een zip uit: pak ALTIJD de hele map uit, niet losse bestanden.
 
 Taal: rechtsboven schakel je tussen NL en EN. Je keuze wordt onthouden.
 
+INFO ZOEKEN (aquainfo en flowgrow)
+----------------------------------
+Met de knop "Zoek info" zoekt de app de naam op bij aquainfo.nl (vooral
+vissen) en flowgrow.de (vooral planten). Link, foto, plaats in de bak en
+land worden dan automatisch ingevuld.
+
+Welke sites gebruikt worden en in welke volgorde, stel je bovenaan de pagina
+in bij "Instellingen: zoeksites". Daar pas je ook de webadressen aan.
+Terug naar de standaard: verwijder sites.json uit de map van de app.
+
+Kan een site niet doorzocht worden (storing, blokkade of een fout adres),
+dan probeert de app de volgende site en zie je een melding, bijvoorbeeld:
+  Flowgrow: kon niet doorzocht worden (HTTP 403)
+
 Werkt dit niet? Zie "PROBLEMEN" onderaan.
 
 
@@ -193,6 +207,20 @@ When you unzip: ALWAYS extract the whole folder, not single files.
 
 Language: top right you can switch between NL and EN. Your choice is
 remembered.
+
+SEARCHING INFO (aquainfo and flowgrow)
+--------------------------------------
+The "Find info" button looks the name up on aquainfo.nl (mostly fish) and
+flowgrow.de (mostly plants). Link, photo, position in the tank and country
+are filled in automatically.
+
+Which sites are used and in what order is set at the top of the page under
+"Settings: search sites". You can edit the web addresses there too.
+Back to the defaults: delete sites.json from the app folder.
+
+If a site cannot be searched (outage, block or a wrong address), the app
+tries the next site and shows a message, for example:
+  Flowgrow: could not be searched (HTTP 403)
 
 Not working? See "TROUBLESHOOTING" at the bottom.
 

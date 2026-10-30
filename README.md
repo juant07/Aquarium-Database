@@ -64,6 +64,30 @@ Er is niets te installeren; alleen Python 3.12 of lager (het gebruikt de
 | Taal | rechtsboven in de app, of `?lang=en`; keuze wordt een jaar onthouden |
 | Tijdzone | `TZ` in `docker-compose.yml` (bepaalt o.a. de ochtendmelding) |
 | Meldingen | `notify.json` in de datamap (naast `plants.db`), zie hieronder; `"lang"` kiest NL/EN voor de pushberichten |
+| Zoekbronnen | uitklapbaar **Instellingen: zoeksites** bovenaan de pagina, of `sites.json` in de datamap |
+
+#### Zoeksites
+
+Bovenaan elke pagina zit **Instellingen: zoeksites** (uitklappen). Daar kies je per
+soort (planten/vissen) welke sites in welke volgorde doorzocht worden, en pas je de
+basis-URL's aan. Beschikbaar: `aquainfo` en `flowgrow`.
+
+Lukt een site niet (verkeerde URL, 403, timeout), dan gaat de app automatisch door
+naar de volgende bron en meldt dit bij het zoeken, bijvoorbeeld
+`Flowgrow: kon niet doorzocht worden (HTTP 403)`.
+
+Dezelfde instellingen staan in `sites.json` in de datamap:
+
+```json
+{
+  "plant": ["flowgrow", "aquainfo"],
+  "vis": ["aquainfo", "flowgrow"],
+  "urls": {"aquainfo": "https://aquainfo.nl", "flowgrow": "https://www.flowgrow.de"}
+}
+```
+
+Bestand weggooien = terug naar de standaard. Onbekende namen en ongeldige URL's
+worden genegeerd.
 
 #### Meldingen (optioneel)
 
@@ -169,6 +193,29 @@ module, which was removed in Python 3.13).
 | Language | top right in the app, or `?lang=en`; remembered for a year |
 | Time zone | `TZ` in `docker-compose.yml` (drives the morning digest) |
 | Notifications | `notify.json` in the data folder (next to `plants.db`), see below; `"lang"` picks NL/EN for push messages |
+| Search sources | expandable **Settings: search sites** at the top of the page, or `sites.json` in the data folder |
+
+#### Search sources
+
+Every page has **Settings: search sites** at the top (expand it). There you pick the
+sites and their order per kind (plants/fish) and edit the base URLs. Available:
+`aquainfo` and `flowgrow`.
+
+If a site cannot be searched (wrong URL, 403, timeout), the app moves on to the next
+source automatically and reports it during the lookup, e.g.
+`Flowgrow: could not be searched (HTTP 403)`.
+
+The same settings live in `sites.json` in the data folder:
+
+```json
+{
+  "plant": ["flowgrow", "aquainfo"],
+  "vis": ["aquainfo", "flowgrow"],
+  "urls": {"aquainfo": "https://aquainfo.nl", "flowgrow": "https://www.flowgrow.de"}
+}
+```
+
+Delete the file to return to the defaults. Unknown names and invalid URLs are ignored.
 
 #### Notifications (optional)
 

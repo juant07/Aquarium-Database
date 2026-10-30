@@ -1,0 +1,11 @@
+{
+  "name": "Aquariumplanten",
+  "short_name": "Planten",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#112233",
+  "theme_color": "#112233",
+  "icons": [
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

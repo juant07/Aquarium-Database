@@ -1,0 +1,160 @@
+AQUARIUMPLANTEN — DATABASE VOOR PLANTEN, VISSEN, METINGEN EN ONDERHOUD
+======================================================================
+
+Een eenvoudig programma op je eigen computer: geen account, je data blijft
+bij je. Werkt op Windows (.exe) en op elke Raspberry Pi / NAS / Linux-server.
+
+
+SNEL BEGINNEN (niets installeren)
+---------------------------------
+Dubbelklik Aquarium.exe. Klaar: de browser opent vanzelf op de app.
+
+Het zwarte venster moet open blijven zolang je de app gebruikt. Sluit je het
+venster, dan stopt de app (je data blijft bewaard).
+
+Pak je een zip uit: pak ALTIJD de hele map uit, niet losse bestanden.
+
+Taal: rechtsboven schakel je tussen NL en EN. Je keuze wordt onthouden.
+
+Werkt dit niet? Zie "PROBLEMEN" onderaan.
+
+
+ZELF EEN EXE MAKEN (alleen met de bronbestanden)
+-----------------------------------------------
+Staat er een build_exe.bat in de map? Dan kun je zelf een .exe maken.
+Nodig: Windows-PC met internet.
+
+1. Installeer Python 3.11 of 3.12 van https://www.python.org/downloads/
+   Belangrijk: zet het vinkje "Add python.exe to PATH" aan.
+2. Dubbelklik build_exe.bat en wacht op "KLAAR: dist\Aquarium.exe".
+3. In de map dist\ staat Aquarium.exe (+ icon.png en manifest.json).
+   Dubbelklikken = de app starten; geen Python meer nodig op die PC.
+   Gebruik Python 3.11 of 3.12; 3.13 werkt niet met deze app.
+
+
+DE APP OP JE GSM OF LAPTOP
+--------------------------
+1. Start de app op de computer in huis. In het zwarte console-venster staan
+   twee regels, bv.:
+
+     Planten op http://localhost:8377
+     Vanaf je gsm of laptop: http://192.168.1.50:8377
+
+   De tweede regel is precies wat je nodig hebt.
+2. Zorg dat je gsm op hetzelfde wifi-netwerk staat als die computer
+   (dus niet op mobiel internet / 4G).
+3. Typ dat adres in de browser van je gsm en klaar.
+4. In de browser: menu -> "Installeren" / "Toevoegen aan startscherm" om de
+   app als icoon op je gsm of bureaublad te zetten (PWA).
+
+Je IP-adres zelf opzoeken (als het zwarte venster al dicht is):
+  a) Windows: Windows + R, typ cmd, Enter, dan:   ipconfig
+     Kijk bij "IPv4-adres" (Engels: "IPv4 Address"), bv. 192.168.1.50.
+  b) Windows zonder cmd: Instellingen -> Netwerk & internet -> Eigenschappen
+     van je verbinding -> "IPv4-adres".
+  c) Mac: Systeeminstellingen -> Netwerk.  Raspberry Pi / Linux: ip a
+
+Dat adres komt van je router (dhcp) en kan na een herstart veranderen. Wil je
+het vastzetten, reserveer dan in je router een "vast adres" voor die computer.
+
+
+JE DATA
+-------
+Naast plants.py (of Aquarium.exe) staan twee dingen die JIJ bezit:
+  plants.db      je hele database
+  photos\        de foto's die je hebt toegevoegd
+
+Kopieer die twee af en toe naar een USB-stick of NAS als backup.
+Opnieuw beginnen: verwijder plants.db en start de app opnieuw.
+Je data blijft op je eigen apparaat. Het programma gaat alleen naar het
+internet voor het opzoeken van plant-/visinfo en voor meldingen.
+
+
+MELDINGEN OP JE GSM (optioneel)
+-------------------------------
+Zonder configuratie werkt de hele app, alleen komen er geen pushberichten.
+Zet naast plants.py (of Aquarium.exe) een bestand notify.json met jouw kanaal.
+Zie notify.json.example in deze map.
+
+Optie A — via Home Assistant (als je die al hebt):
+  {
+    "ha": {
+      "url": "http://192.168.1.10:8123",
+      "token": "jouw-long-lived-token",
+      "services": ["mobile_app_jouw_toestel"]
+    }
+  }
+  Token maak je in Home Assistant: profiel -> Beveiliging -> Long-lived access
+  tokens -> Token aanmaken. Let op: dat token geeft volledige toegang tot je
+  Home Assistant. Deel dat bestand dus nooit met iemand anders.
+
+Optie B — via ntfy (gratis, geen account nodig):
+  {
+    "ntfy": {"server": "https://ntfy.sh", "topic": "jouw-eigen-onderwerp"}
+  }
+  Kies een onderwerp dat nog niemand gebruikt (bijv. aquarium-jan).
+  Installeer de app "ntfy" op je gsm, kies server ntfy.sh en abonneer je op
+  hetzelfde onderwerp.
+
+De app meldt:
+  - zodra je een taak toevoegt of afvinkt
+  - elke ochtend rond 09:00 met alle taken die te laat zijn
+
+
+EIGEN SERVER IN PLAATS VAN WINDOWS (optioneel)
+-----------------------------------------------
+Op een Raspberry Pi, NAS of Linux-server:
+  python3 plants.py
+en open daarna http://<ip>:8377
+Er is geen installatie nodig: het is één bestand (plants.py).
+
+Wil je hem automatisch laten starten (systemd), maak dan
+/etc/systemd/system/aquarium.service met:
+  [Unit]
+  Description=Aquariumplanten
+  After=network-online.target
+  [Service]
+  WorkingDirectory=/opt/aquarium
+  ExecStart=/usr/bin/python3 /opt/aquarium/plants.py
+  Restart=always
+  [Install]
+  WantedBy=multi-user.target
+Daarna: sudo systemctl enable --now aquarium
+(Zet plants.py, icon.png en manifest.json in /opt/aquarium.)
+
+
+MET DOCKER (Debian, Ubuntu, NAS met Docker)
+-------------------------------------------
+1. Docker installeren (eenmalig):
+     curl -fsSL https://get.docker.com | sudo sh
+2. Deze map op de server zetten en daarin:
+     mkdir -p data
+     docker compose up -d --build
+   Sneller kan ook, met het kant-en-klare image:
+     docker compose pull && docker compose up -d --no-build
+3. Open http://<ip-van-de-server>:8377
+
+Je data (plants.db + photos) staat in de map "data"; die map is je backup.
+Bijwerken: nieuwe bestanden eroverheen kopiëren en weer
+"docker compose up -d --build". Je data blijft staan.
+
+- Pusht de app niet naar Home Assistant? Gebruik het IP-adres van HA in
+  notify.json; namen als homeassistant.local werken niet in een container.
+- Zet notify.json in de map "data" (niet ernaast), met chmod 600.
+- De tijdzone staat in docker-compose.yml (TZ). Klopt die niet, dan komt de
+  ochtendmelding op het verkeerde moment.
+
+
+PROBLEMEN
+---------
+- "Windows heeft uw pc beveiligd" / Defender blokkeert:
+  rechtsklik op het bestand -> Eigenschappen -> vinkje "Unblock" aan.
+- Vanaf de gsm geen verbinding:
+  * beide op hetzelfde wifi (niet op 4G),
+  * Windows firewall-toestemming voor poort 8377 toestaan,
+  * adres met poort gebruiken: http://192.168.1.50:8377
+- "Poort 8377 niet beschikbaar": de app draait al. Sluit het andere venster.
+- Zwart venster sluit direct: start Aquarium.exe vanuit een terminal
+  (cmd) om de melding te lezen, of controleer of de app al draait.
+
+Vragen? Zie ook AGENTS.md naast plants.py.

@@ -1,0 +1,18 @@
+services:
+  aquarium:
+    # Kant-en-klaar image (na de eerste GitHub Action). Zet hier je eigen repo neer,
+    # of laat 'm staan en gebruik 'docker compose up -d --build' (bouwt lokaal).
+    image: ghcr.io/juant07/aquarium:latest
+    build: .
+    container_name: aquarium
+    restart: unless-stopped
+    ports:
+      - "8377:8377"
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: Europe/Amsterdam
+    # homeassistant.local bestaat niet in een container (geen mDNS): gebruik het IP
+    # in notify.json, of voeg de regel hieronder toe.
+    # extra_hosts:
+    #   - "homeassistant.local:192.168.1.10"

@@ -1,0 +1,16 @@
+notify.json
+ha_notify.json.bak
+*.db
+*.db.bak-*
+photos/
+*.zip
+*.xlsx
+__pycache__/
+*.log
+.digest_sent
+data/
+.git/
+.github/
+AGENTS.md
+instructies.txt
+build_exe.bat

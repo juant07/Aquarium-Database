@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Zelftest voor backup, grafieken, versie-check en soft-delete — run: python3 test_features.py"""
-import json, os, sqlite3, tempfile, zipfile
+import json, os, re, sqlite3, tempfile, zipfile
+from html.parser import HTMLParser
 
 import plants
 
@@ -83,5 +84,42 @@ c.close()
 assert namen == ["Testplant", "Nieuw"], namen
 assert not os.path.exists(os.path.join(plants.PHOTOS, "oud.jpg"))
 assert os.path.exists(os.path.join(plants.PHOTOS, "nieuw.jpg"))
+
+# ---------- pagina-HTML: geen kapotte attributen/tags (bug v1.1.0) ----------
+c = plants.db()
+c.execute("INSERT INTO aquaria(naam,liters,wissel_pct) VALUES('Testbak',150,25)")
+tid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+c.execute("INSERT INTO plants(naam,soort) VALUES('Waterplant','plant')")
+c.commit()
+html_ = plants.page(c, tid, "plant")
+c.close()
+assert 'value="150"' in html_ and 'value="25"' in html_, "tankvelden niet gequote"
+assert not re.search(r'value="[^"]*[<>]', html_), "value-attribuut loopt door in de tag"
+assert 'name=liters_' in html_ and 'name=pct_' in html_
+
+
+class Checker(HTMLParser):
+    leeg = {"input", "br", "img", "meta", "link", "hr", "source"}
+
+    def __init__(self):
+        super().__init__()
+        self.stack, self.fout = [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.leeg:
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        if self.stack and self.stack[-1] == tag:
+            self.stack.pop()
+        elif tag not in self.leeg:
+            self.fout.append(f"</{tag}> sluit {self.stack[-2:]}")
+
+
+chk = Checker()
+chk.feed(html_)
+assert not chk.fout, chk.fout[:5]
+assert not chk.stack, chk.stack
+assert '<details class=inst>' in html_ and html_.count("</details>") == 1
 
 print("OK")

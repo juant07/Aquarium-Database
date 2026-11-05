@@ -754,12 +754,13 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     taken = c.execute(
         "SELECT id,titel,interval_dagen,laatst_gedaan FROM taken WHERE tank_id=? ORDER BY id",
         (tid,)).fetchall()
+    v = lambda x: html.escape("" if x is None else f"{x:g}", quote=True)
     tankvelden = "".join(
         f'<label class=grow>{html.escape(n)} '
         f'<input type=number step=1 min=0 name=liters_{i} style="width:6rem"'
-        f' placeholder="L" value="{"" if li is None else f"{li:g}"}> '
+        f' placeholder="L" value="{v(li)}"> '
         f'<input type=number step=1 min=1 max=100 name=pct_{i} style="width:5rem"'
-        f' placeholder="%" value="{"" if w is None else f"{w:g}"}> %</label>'
+        f' placeholder="%" value="{v(w)}"> %</label>'
         for i, n, li, w in tanks)
 
     taken_html = []

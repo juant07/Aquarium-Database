@@ -35,6 +35,28 @@ Kan een site niet doorzocht worden (storing, blokkade of een fout adres),
 dan probeert de app de volgende site en zie je een melding, bijvoorbeeld:
   Flowgrow: kon niet doorzocht worden (HTTP 403)
 
+BACKUP, EXPORT EN HERSTELLEN
+----------------------------
+Onder "Instellingen: zoeksites" (bovenaan) staan ook:
+
+  Backup downloaden   een zip met je database en foto's (bewaar hem elders!)
+  CSV exporteren      je plantenlijst als spreadsheet-bestand
+
+Daarnaast maakt de app elke nacht zelf een backup in de map "backups"
+(naast plants.db); de laatste 7 blijven staan. Je wachtwoord/token voor
+meldingen (notify.json) zit NOOIT in een backup.
+
+Per ongeluk iets verwijderd? Na het verwijderen staat bovenaan
+"Ongedaan maken": 30 dagen lang kun je een item terugzetten. Daarna ruimt
+de app het op.
+
+Per bak kun je liters en het waterwissel-percentage instellen (zelfde
+instellingenblok). Een taak met "water" in de naam laat dan zien hoeveel
+liter dat is, bijvoorbeeld: ~25% = 38 L.
+
+Onderaan de pagina staat de versie van de app. Is er een nieuwere versie,
+dan meldt de app dat (controle: 1x per dag, alleen als je internet hebt).
+
 Werkt dit niet? Zie "PROBLEMEN" onderaan.
 
 
@@ -221,6 +243,27 @@ Back to the defaults: delete sites.json from the app folder.
 If a site cannot be searched (outage, block or a wrong address), the app
 tries the next site and shows a message, for example:
   Flowgrow: could not be searched (HTTP 403)
+
+BACKUP, EXPORT AND RESTORE
+--------------------------
+Under "Settings: search sites" (top of the page) you also find:
+
+  Download backup   a zip with your database and photos (keep it elsewhere!)
+  Export CSV        your plant list as a spreadsheet file
+
+The app also makes its own backup every night in the "backups" folder
+(next to plants.db); the last 7 are kept. Your notification token
+(notify.json) is NEVER included in a backup.
+
+Deleted something by accident? After deleting, "Undo" appears at the top:
+for 30 days you can restore an item. After that the app cleans it up.
+
+Per tank you can set litres and the water-change percentage (same settings
+block). A task with "water" in its name then shows how many litres that is,
+for example: ~25% = 38 L.
+
+The app version is shown at the bottom of the page. If a newer version
+exists, the app tells you (checked once a day, only when online).
 
 Not working? See "TROUBLESHOOTING" at the bottom.
 

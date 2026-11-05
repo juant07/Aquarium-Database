@@ -16,6 +16,16 @@ Broncode: <https://github.com/juant07/Aquarium-Database>
 > AI-codingassistent. De code is in samenspraak met de eigenaar geschreven en
 > getest op Linux, Windows (via Wine) en in Docker.
 
+### Wat het doet
+
+- Planten en vissen met foto, link, plaats in de bak, herkomst en "bij wie gehaald".
+- Water-inspecties (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) met mini-grafiekjes van het verloop.
+- Onderhoudstaken met interval en een dagelijkse push/herinnering; waterwissel-taken tonen
+  meteen hoeveel liter dat is bij het ingestelde volume en percentage.
+- Foto's worden in de browser verkleind (max. 1600 px) vóór upload.
+- Verwijderen is 30 dagen terug te draaien; de nachtelijke backup bewaart de laatste 7 dagen.
+- Alles tweetalig (NL/EN), ook de pushberichten.
+
 ### Snel starten
 
 #### Docker (kant-en-klaar image)
@@ -65,6 +75,9 @@ Er is niets te installeren; alleen Python 3.12 of lager (het gebruikt de
 | Tijdzone | `TZ` in `docker-compose.yml` (bepaalt o.a. de ochtendmelding) |
 | Meldingen | `notify.json` in de datamap (naast `plants.db`), zie hieronder; `"lang"` kiest NL/EN voor de pushberichten |
 | Zoekbronnen | uitklapbaar **Instellingen: zoeksites** bovenaan de pagina, of `sites.json` in de datamap |
+| Backup | elke nacht automatisch in `backups/` (7 stuks bewaard) + **Backup downloaden** in het instellingenblok |
+| Export | **CSV exporteren** in het instellingenblok (`;`-gescheiden, Excel-vriendelijk) |
+| Volume / waterwissel | per bak liters en waterwissel-% instellen in het instellingenblok (leeg = 30%) |
 
 #### Zoeksites
 
@@ -145,6 +158,16 @@ Source: <https://github.com/juant07/Aquarium-Database>
 > AI coding assistant. The code was written in dialogue with the owner and
 > tested on Linux, Windows (via Wine) and in Docker.
 
+### What it does
+
+- Plants and fish with photo, link, position in the tank, origin and "bought from".
+- Water inspections (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) with mini trend charts.
+- Maintenance tasks with an interval and a daily push reminder; water-change tasks show
+  the litres for the configured tank volume and percentage.
+- Photos are resized in the browser (max 1600 px) before upload.
+- Deletes can be undone for 30 days; the nightly backup keeps the last 7 days.
+- Everything bilingual (NL/EN), including push messages.
+
 ### Quick start
 
 #### Docker (prebuilt image)
@@ -194,6 +217,9 @@ module, which was removed in Python 3.13).
 | Time zone | `TZ` in `docker-compose.yml` (drives the morning digest) |
 | Notifications | `notify.json` in the data folder (next to `plants.db`), see below; `"lang"` picks NL/EN for push messages |
 | Search sources | expandable **Settings: search sites** at the top of the page, or `sites.json` in the data folder |
+| Backup | nightly into `backups/` (7 kept) + **Download backup** in the settings block |
+| Export | **Export CSV** in the settings block (`;`-separated, Excel friendly) |
+| Volume / water change | set litres and water-change % per tank in the settings block (empty = 30%) |
 
 #### Search sources
 

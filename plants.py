@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Aquariumplanten DB (hive-pal-stijl). Run: python3 plants.py -> http://localhost:8377"""
 # ponytail: cgi.FieldStorage bestaat tot Python 3.12 (3.13 verwijdert cgi) — upgrade: multipart handmatig parsen of naar een framework als je ooit verhuist
-import cgi, html, json, os, re, socket, sqlite3, sys, threading, time, urllib.request
-from datetime import date, datetime
+import cgi, csv, html, io, json, os, re, shutil, socket, sqlite3, sys, tempfile, threading, \
+       time, urllib.request, zipfile
+from datetime import date, datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode, quote
 
@@ -12,6 +13,9 @@ DATA = os.environ.get("AQUARIUM_DATA") or HERE
 DB = os.path.join(DATA, "plants.db")
 PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
+BACKUPS = os.path.join(DATA, "backups")
+UPDATE_CFG = os.path.join(DATA, ".latest_version")
+VERSION = "1.1.0"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 
@@ -35,6 +39,8 @@ NOTIFY_EN = [
     (" (elke ", " (every "), (" afgevinkt", " checked off"),
     ("Taak toegevoegd", "Task added"), ("Taak gedaan", "Task done"),
     ("Aquarium-onderhoud", "Aquarium maintenance"),
+    ("Metingen verouderd:", "Measurements overdue:"),
+    (" nog geen meting", " no measurement yet"), (" dagen geleden", " days ago"),
 ]
 
 
@@ -91,13 +97,30 @@ def meld_late_taken():
     # en zouden anders elke dag opnieuw gemeld worden zonder afgevinkt te kunnen worden.
     rows = c.execute("SELECT t.titel,t.interval_dagen,t.laatst_gedaan,a.naam "
                      "FROM taken t JOIN aquaria a ON a.id=t.tank_id").fetchall()
+    meet = c.execute("SELECT a.naam, MAX(i.datum) FROM aquaria a "
+                     "LEFT JOIN inspecties i ON i.tank_id=a.id GROUP BY a.id").fetchall()
     c.close()
     late = [(t, an, ll) for t, iv, ll, an in rows if overdue(ll, iv) is True]
-    if not late:
+    oud = []
+    for an, laatste in meet:
+        try:
+            dagen = (date.today() - date.fromisoformat(laatste)).days if laatste else None
+        except ValueError:
+            dagen = None
+        if dagen is None or dagen > MEET_DAGEN:
+            oud.append((an, dagen))
+    if not late and not oud:
         return False
-    tekst = "\n".join(f"- {t}" + ("" if ll else " (nog nooit)") + (f" [{an}]" if an else "")
-                      for t, an, ll in late)
-    return notify("Te laat onderhoud:\n" + tekst, "Aquarium-onderhoud")
+    delen = []
+    if late:
+        delen.append("Te laat onderhoud:\n" + "\n".join(
+            f"- {t}" + ("" if ll else " (nog nooit)") + (f" [{an}]" if an else "")
+            for t, an, ll in late))
+    if oud:
+        delen.append("Metingen verouderd:\n" + "\n".join(
+            f"- {an}: " + ("nog geen meting" if d is None else f"{d} dagen geleden")
+            for an, d in oud))
+    return notify("\n".join(delen), "Aquarium-onderhoud")
 
 
 def taken_watch():
@@ -118,6 +141,8 @@ def db():
     if "tank_id" not in {r[1] for r in c.execute("PRAGMA table_info(plants)")}:
         c.execute("ALTER TABLE plants ADD COLUMN tank_id INTEGER")
         c.execute("UPDATE plants SET tank_id=1 WHERE tank_id IS NULL")
+    if "verwijderd" not in {r[1] for r in c.execute("PRAGMA table_info(plants)")}:
+        c.execute("ALTER TABLE plants ADD COLUMN verwijderd TEXT")
     if "soort" not in {r[1] for r in c.execute("PRAGMA table_info(plants)")}:
         c.execute("ALTER TABLE plants ADD COLUMN soort TEXT DEFAULT 'plant'")
         c.execute("UPDATE plants SET soort='plant' WHERE soort IS NULL")
@@ -126,6 +151,10 @@ def db():
         c.execute("INSERT INTO plant_tanks(plant_id,tank_id) "
                   "SELECT id,tank_id FROM plants WHERE tank_id IS NOT NULL")
     c.execute("CREATE TABLE IF NOT EXISTS aquaria(id INTEGER PRIMARY KEY, naam TEXT)")
+    acols = {r[1] for r in c.execute("PRAGMA table_info(aquaria)")}
+    for col, typ in (("liters", "REAL"), ("wissel_pct", "REAL")):
+        if col not in acols:
+            c.execute(f"ALTER TABLE aquaria ADD COLUMN {col} {typ}")
     c.execute("""CREATE TABLE IF NOT EXISTS inspecties(
         id INTEGER PRIMARY KEY, tank_id INTEGER, datum TEXT,
         temp REAL, ph REAL, no2 REAL, no3 REAL, po4 REAL,
@@ -199,6 +228,11 @@ th{color:#9ab;font-weight:600}
 img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:block}
 .pill{padding:.15rem .55rem;border-radius:99px;font-size:.75rem;white-space:nowrap}
 .pill.late{background:#a33;color:#fff} .pill.ok{background:#2a8f4a;color:#fff}
+.pill.warn{background:#b06a12;color:#fff}
+.grafieken{display:flex;flex-wrap:wrap;gap:.9rem;margin:.4rem 0 1rem}
+.grafieken figure{margin:0;font-size:.7rem;color:#9ab}
+.grafieken svg{display:block;background:#0b2030;border-radius:4px}
+.voet{color:#567;font-size:.75rem;margin:2rem 0 1rem;text-align:center}
 .taak{display:flex;gap:.7rem;align-items:center;background:#1d3a52;padding:.5rem .7rem;border-radius:6px;margin-bottom:.4rem;flex-wrap:wrap}
 .taak .t{flex:1;min-width:10rem}
 .taak small{color:#9ab}
@@ -233,7 +267,16 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label>Flowgrow-URL<input type=text name=url_flowgrow value="@@URL_FG@@"></label>
 <button>Opslaan</button>
 <small>Beschikbaar: aquainfo, flowgrow. Lukt een site niet, dan meldt de app dat bij het zoeken.</small>
-</form></details>
+</form>
+<p><a href="/backup.zip">Backup downloaden</a> &middot;
+<a href="/export.csv?tank=@@TID@@">CSV exporteren</a></p>
+<form method=post action=/tank_settings>
+<input type=hidden name=tank value=@@TID@@><input type=hidden name=soort value=@@SOORT@@>
+<small>Per bak: liters en waterwissel-% (leeg = onbekend / 30%)</small>
+@@TANKVELDEN@@
+<button>Opslaan</button>
+</form>
+</details>
 <div class=tabs>@@TABS@@</div>
 <form class=mini method=post action=/add_tank>
 <input type=hidden name=soort value=@@SOORT@@>
@@ -253,7 +296,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label class=grow>Plaats in bak<input type=text name=plaats placeholder="@@PLAATS@@"></label>
 <label class=grow>Land / herkomst<input type=text name=land></label>
 <label class=grow>Bij wie gehaald<input type=text name=van_wie></label>
-<label>Foto<input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false"></label>
+<label>Foto<input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false;verklein(this)"></label>
 <button>Toevoegen</button>
 </div>
 <input type=hidden name=lookup_foto>
@@ -265,7 +308,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <div class=grid>@@CARDS@@</div>
 @@PAGER@@
 
-<h2>Water-inspecties</h2>
+<h2>Water-inspecties @@MEETBADGE@@</h2>
 <form class=mini method=post action=/add_inspectie enctype=multipart/form-data>
 <input type=hidden name=tank_id value=@@TID@@>
 <input type=hidden name=soort value=@@SOORT@@>
@@ -280,10 +323,11 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label>PO₄<input type=number step=0.01 name=po4 placeholder="0,5"></label>
 <label>CO₂<select name=co2><option value="">-</option><option value=ja>ja</option><option value=nee>nee</option></select></label>
 <label class=grow>Opmerking<input type=text name=opmerking></label>
-<label>Foto<input type=file name=foto accept=image/*></label>
+<label>Foto<input type=file name=foto accept=image/* onchange="verklein(this)"></label>
 <button>Log</button>
 </div>
 </form>
+@@GRAFIEK@@
 @@INSP@@
 
 <h2>Onderhoudstaken</h2>
@@ -297,6 +341,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 </div>
 </form>
 @@TAKEN@@
+<p class=voet>@@VOET@@</p>
 <div id=lightbox><img alt=""></div>
 <script>
 function filterCards(q){
@@ -313,6 +358,24 @@ function cardPreview(form, d){
   const im=card.querySelector('img'); if(im&&d.foto) im.setAttribute('src','/photos/'+d.foto);
   const lk=card.querySelector('.p-link');
   if(lk&&d.link){lk.innerHTML='';const a=document.createElement('a');a.href=d.link;a.target='_blank';a.rel='noopener';a.textContent=d.link;lk.appendChild(a);}
+}
+async function verklein(inp){
+  const f=inp.files&&inp.files[0];
+  if(!f||!/^image\//.test(f.type))return;
+  try{
+    const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=URL.createObjectURL(f);});
+    const s=Math.min(1,1600/Math.max(img.width,img.height));
+    if(s>=1&&f.size<350000)return;
+    const c=document.createElement('canvas');
+    c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const b=await new Promise(ok=>c.toBlob(ok,'image/jpeg',0.82));
+    URL.revokeObjectURL(img.src);
+    if(!b||b.size>=f.size)return;
+    const dt=new DataTransfer();
+    dt.items.add(new File([b],f.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'}));
+    inp.files=dt.files;
+  }catch(e){}
 }
 async function zoekInfo(btn, form){
   const n=form.naam.value.trim();
@@ -382,7 +445,7 @@ CARD = """<div class=card>
 <label>Land</label><input type=text name=land value="{land_e}">
 <label>Bij wie</label><input type=text name=van_wie value="{van_wie_e}">
 <label>Aquarium(en)</label><div class=checks>{tankchecks}</div>
-<label>Nieuwe foto</label><input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false">
+<label>Nieuwe foto</label><input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false;verklein(this)">
 <input type=hidden name=lookup_foto>
 <img class=lookprev alt="">
 <label class=netopt><input type=checkbox name=use_lookup value=1> Internetfoto gebruiken</label>
@@ -409,6 +472,10 @@ EN_REPL = [
     ("Internetfoto gebruiken", "Use internet photo"),
     ("Zoek in deze lijst op naam...", "Search this list by name..."),
     ("Zoek info", "Find info"),
+    ("Backup downloaden", "Download backup"),
+    ("CSV exporteren", "Export CSV"),
+    ("Per bak: liters en waterwissel-% (leeg = onbekend / 30%)",
+     "Per tank: litres and water-change % (empty = unknown / 30%)"),
     ("Instellingen: zoeksites", "Settings: search sites"),
     ("Planten zoeken via (volgorde, kommagescheiden)", "Search plants via (order, comma-separated)"),
     ("Vissen zoeken via (volgorde, kommagescheiden)", "Search fish via (order, comma-separated)"),
@@ -469,6 +536,12 @@ T = {
         "done": "Klaar", "no_tasks": "geen taken — voeg erboven een toe",
         "confirm_del": "Verwijderen?",
         "bronfout": "kon niet doorzocht worden",
+        "no_measure": "nog geen meting",
+        "measure_0": "laatste meting: vandaag",
+        "measure_1": "laatste meting: gisteren",
+        "measure_n": "laatste meting: {n} dagen geleden",
+        "undo": "Ongedaan maken",
+        "version": "versie", "newer_available": "nieuwer beschikbaar:",
     },
     "en": {
         "plants": "Plants", "fish": "Fish",
@@ -487,6 +560,12 @@ T = {
         "done": "Done", "no_tasks": "no tasks — add one above",
         "confirm_del": "Delete?",
         "bronfout": "could not be searched",
+        "no_measure": "no measurement yet",
+        "measure_0": "last measurement: today",
+        "measure_1": "last measurement: yesterday",
+        "measure_n": "last measurement: {n} days ago",
+        "undo": "Undo",
+        "version": "version", "newer_available": "newer available:",
     },
 }
 
@@ -495,6 +574,7 @@ MSG_EN = {
     "Aquarium toegevoegd": "Aquarium added", "Inspectie gelogd": "Inspection logged",
     "Meting verwijderd": "Measurement deleted", "Taak toegevoegd": "Task added",
     "Taak afgevinkt": "Task checked off", "Taak verwijderd": "Task deleted",
+    "Hersteld": "Restored", "Ongedaan gemaakt": "Undone",
     "Instellingen opgeslagen": "Settings saved", "Opslaan mislukt": "Saving failed",
 }
 
@@ -509,6 +589,21 @@ TPL = {"nl": (PAGE, CARD, INSP_ROW),
        "en": tuple(_en_tmpl(x) for x in (PAGE, CARD, INSP_ROW))}
 
 
+def svg_grafiek(waarden, kleur="#8cf", breed=180, hoog=34):
+    """Kleine SVG-polyline van de niet-lege waarden (chronologisch) — geen library."""
+    pts = [v for v in waarden if v is not None]
+    if len(pts) < 2:
+        return ""
+    lo, hi = min(pts), max(pts)
+    span = (hi - lo) or 1
+    stap = breed / (len(pts) - 1)
+    coords = " ".join(f"{i*stap:.1f},{hoog-2-(v-lo)/span*(hoog-4):.1f}"
+                      for i, v in enumerate(pts))
+    return (f'<svg viewBox="0 0 {breed} {hoog}" width="{breed}" height="{hoog}">'
+            f'<polyline points="{coords}" fill="none" stroke="{kleur}" stroke-width="1.5" '
+            f'stroke-linejoin="round"/></svg>')
+
+
 def overdue(laatst, interval):
     if not interval:
         return None
@@ -518,21 +613,24 @@ def overdue(laatst, interval):
 
 
 PER_PAGE = 12
+MEET_DAGEN = 14   # na zoveel dagen zonder meting: badge + digest-melding
 
 
-def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False, lang="nl"):
+def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False,
+         lang="nl", undo=None):
     lang = lang if lang in T else "nl"
     t = lambda k: T[lang][k]
     tpl_page, tpl_card, tpl_insp = TPL[lang]
     soort = "vis" if soort == "vis" else "plant"
     per = per if isinstance(per, int) and 1 <= per <= 200 else PER_PAGE
-    tid, tnaam = c.execute(
-        "SELECT id,naam FROM aquaria WHERE id=?", (tank,)).fetchone() or (1, "Aquarium")
-    tanks = c.execute("SELECT id,naam FROM aquaria ORDER BY id").fetchall()
+    tid, tnaam, tliter, tpct = c.execute(
+        "SELECT id,naam,liters,wissel_pct FROM aquaria WHERE id=?",
+        (tank,)).fetchone() or (1, "Aquarium", None, None)
+    tanks = c.execute("SELECT id,naam,liters,wissel_pct FROM aquaria ORDER BY id").fetchall()
     qs = "&soort=vis" if soort == "vis" else ""
     tabs = " ".join(
         f'<a href="/?tank={i}{qs}"{" class=on" if i == tid else ""}>{html.escape(n)}</a>'
-        for i, n in tanks)
+        for i, n, _, _ in tanks)
     sectabs = " ".join(
         f'<a href="/?tank={tid}{"&soort=vis" if k == "vis" else ""}"'
         f'{" class=on" if k == soort else ""}>{t("fish" if k == "vis" else "plants")}</a>'
@@ -543,12 +641,13 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     checks = lambda sel: "".join(
         f'<label><input type=checkbox name=tank_id value={i}'
         f'{" checked" if i in sel else ""}>{html.escape(n)}</label>'
-        for i, n in tanks)
+        for i, n, _, _ in tanks)
 
     rows = c.execute(
         "SELECT DISTINCT p.id,p.naam,p.link,p.plaats,p.land,p.van_wie,p.foto "
         "FROM plants p JOIN plant_tanks pt ON pt.plant_id=p.id "
-        "WHERE pt.tank_id=? AND p.soort=? ORDER BY p.naam", (tid, soort)).fetchall()
+        "WHERE pt.tank_id=? AND p.soort=? AND p.verwijderd IS NULL ORDER BY p.naam",
+        (tid, soort)).fetchall()
     totaal = len(rows)
     npages = max(1, (totaal + per - 1) // per)
     pageno = min(max(1, pageno), npages)
@@ -593,9 +692,18 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         f'{" class=on" if code == lang else ""}>{code.upper()}</a>'
         for code in ("nl", "en"))
     bron_urls, bron_order = sites()
+    voet = f"v{VERSION}"
+    _nieuw = nieuwere_versie()
+    if _nieuw:
+        voet += f" &middot; {t('newer_available')} v{html.escape(_nieuw)}"
+    voet = f"{t('version')} {voet}"
     if msg and lang == "en":
         msg = MSG_EN.get(msg, msg)
-    msg_html = f'<div id=banner class=banner>{html.escape(msg)}</div>' if msg else ""
+    msg_html = ""
+    if msg:
+        undo_html = (f' &middot; <a href="/restore?id={int(undo)}">{t("undo")}</a>'
+                     if undo and str(undo).isdigit() else "")
+        msg_html = f'<div id=banner class=banner>{html.escape(msg)}{undo_html}</div>' 
 
     fmt = lambda v, d=2: ("%%.%df" % d) % v if v is not None else "-"
     insp = c.execute(
@@ -617,9 +725,43 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     if len(insp) == 30:
         insp_html.append(f"<small style=color:#9ab>{t('last30')}</small>")
 
+    meetbadge = ""
+    if not insp:
+        meetbadge = f'<span class="pill late">{t("no_measure")}</span>'
+    else:
+        try:
+            dagen = (date.today() - date.fromisoformat(insp[0][1])).days
+        except (TypeError, ValueError):
+            dagen = 0
+        kl = "late" if dagen > 30 else ("warn" if dagen > MEET_DAGEN else "ok")
+        lab = (t("measure_0") if dagen <= 0 else
+               t("measure_1") if dagen == 1 else t("measure_n").format(n=dagen))
+        meetbadge = f'<span class="pill {kl}">{lab}</span>'
+
+    chrono = list(reversed(insp))
+    figs = []
+    for lab, idx, col in (("GH", 2, "#8cf"), ("KH", 3, "#9ce"), ("Temp", 4, "#e8a"),
+                          ("pH", 5, "#c9f"), ("NO\u2082", 6, "#f9a"),
+                          ("NO\u2083", 7, "#af9"), ("PO\u2084", 8, "#9fd")):
+        waarden = [r[idx] for r in chrono]
+        g = svg_grafiek(waarden, col)
+        if g:
+            bekend = [v for v in waarden if v is not None]
+            figs.append(f'<figure>{lab} {g}<figcaption>{min(bekend):g}&ndash;'
+                        f'{max(bekend):g}</figcaption></figure>')
+    grafiek = f'<div class=grafieken>{"".join(figs)}</div>' if figs else ""
+
     taken = c.execute(
         "SELECT id,titel,interval_dagen,laatst_gedaan FROM taken WHERE tank_id=? ORDER BY id",
         (tid,)).fetchall()
+    tankvelden = "".join(
+        f'<label class=grow>{html.escape(n)} '
+        f'<input type=number step=1 min=0 name=liters_{i} style="width:6rem"'
+        f' placeholder="L" value="{"" if li is None else f"{li:g}"}> '
+        f'<input type=number step=1 min=1 max=100 name=pct_{i} style="width:5rem"'
+        f' placeholder="%" value="{"" if w is None else f"{w:g}"}> %</label>'
+        for i, n, li, w in tanks)
+
     taken_html = []
     for kid, titel, interval, laatst in taken:
         od = overdue(laatst, interval)
@@ -629,10 +771,14 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         else:
             rest = interval - (date.today() - date.fromisoformat(laatst)).days if laatst else interval
             pill = f'<span class="pill ok">{t("left").format(n=rest)}</span>'
+        hint = ""
+        if tliter and "water" in (titel or "").lower():
+            pct = tpct or 30
+            hint = f' <span class=pgcur>~{pct:g}% = {tliter * pct / 100:.0f} L</span>'
         taken_html.append(
             f'<div class=taak><span class=t>{html.escape(titel)}</span>'
             f'<small>{t("every_last").format(n=interval, last=html.escape(laatst or t("never_done")))}</small>'
-            f'{pill}'
+            f'{hint}{pill}'
             f'<form method=post action=/taak_done><input type=hidden name=id value={kid}>'
             f'<input type=hidden name=soort value={soort}><button>{t("done")}</button></form>'
             f'<form method=post action=/del_taak onsubmit="return confirm(\'{t("confirm_del")}\')">'
@@ -644,7 +790,7 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
 
     # ponytail: geen str.format (CSS-braces) — vervang vaste placeholders; content kan geen @@..@@ zijn
     out = tpl_page
-    for k, v in (("@@NAAM@@", html.escape(tnaam)),
+    for k, v in (("@@NAAM@@", html.escape(tnaam) + (f" &middot; {tliter:g} L" if tliter else "")),
                  ("@@COUNT@@", f"{totaal} {t('fish_lc' if soort == 'vis' else 'plant_lc')}, "
                                f"{len(insp)} {t('measurements')}"),
                  ("@@LANGSW@@", langsw),
@@ -664,6 +810,10 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
                  ("@@SITEVIS@@", ", ".join(bron_order["vis"])),
                  ("@@URL_AQ@@", html.escape(bron_urls["aquainfo"], quote=True)),
                  ("@@URL_FG@@", html.escape(bron_urls["flowgrow"], quote=True)),
+                 ("@@TANKVELDEN@@", tankvelden),
+                 ("@@VOET@@", voet),
+                 ("@@MEETBADGE@@", meetbadge),
+                 ("@@GRAFIEK@@", grafiek),
                  ("@@INSP@@", "\n".join(insp_html)),
                  ("@@TAKEN@@", "\n".join(taken_html))):
         out = out.replace(k, v)
@@ -680,6 +830,109 @@ def save_photo(field):
     with open(os.path.join(PHOTOS, name), "wb") as f:
         f.write(field.file.read())
     return name
+
+
+def maak_backup(dest):
+    """Zip met een consistente db-kopie (VACUUM INTO) + foto's + sites.json.
+
+    notify.json (HA-token) gaat er bewust NIET in."""
+    tmp = os.path.join(DATA, f".vacuum-{int(time.time()*1000)}.db")
+    c = sqlite3.connect(DB)
+    try:
+        c.execute("VACUUM INTO ?", (tmp,))
+    finally:
+        c.close()
+    try:
+        with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+            z.write(tmp, "plants.db")
+            if os.path.isdir(PHOTOS):
+                for n in sorted(os.listdir(PHOTOS)):
+                    fp = os.path.join(PHOTOS, n)
+                    if os.path.isfile(fp):
+                        z.write(fp, "photos/" + n)
+            if os.path.isfile(SITES_CFG):
+                z.write(SITES_CFG, "sites.json")
+    finally:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return dest
+
+
+def ruim_backups_op(keep=7):
+    try:
+        namen = sorted(n for n in os.listdir(BACKUPS) if n.endswith(".zip"))
+    except OSError:
+        return
+    for n in namen[:-keep]:
+        try:
+            os.remove(os.path.join(BACKUPS, n))
+        except OSError:
+            pass
+
+
+def nieuwere_versie():
+    """Alleen uit de cache (update_watch haalt 1x per dag) — nooit netwerk in een request."""
+    try:
+        with open(UPDATE_CFG) as f:
+            tag = str(json.load(f)[1] or "").lstrip("v")
+        nieuw = tuple(int(x) for x in re.findall(r"\d+", tag)[:3])
+        eigen = tuple(int(x) for x in re.findall(r"\d+", VERSION)[:3])
+        return tag if nieuw > eigen else None
+    except Exception:
+        return None
+
+
+def update_watch():
+    while True:
+        try:
+            with open(UPDATE_CFG) as f:
+                gedaan = json.load(f)[0]
+        except Exception:
+            gedaan = None
+        if gedaan != date.today().isoformat():
+            try:
+                d = _get_json("https://api.github.com/repos/juant07/Aquarium-Database/releases/latest")
+                tag = str(d.get("tag_name") or "").lstrip("v") or None
+            except Exception:
+                tag = None
+            try:
+                with open(UPDATE_CFG, "w") as f:
+                    json.dump([date.today().isoformat(), tag], f)
+            except OSError:
+                pass
+        time.sleep(3600)
+
+
+def ruim_verwijderd_op(dagen=30):
+    grens = (date.today() - timedelta(days=dagen)).isoformat()
+    c = db()
+    rows = c.execute("SELECT id,foto FROM plants WHERE verwijderd IS NOT NULL "
+                     "AND verwijderd < ?", (grens,)).fetchall()
+    for pid, foto in rows:
+        c.execute("DELETE FROM plants WHERE id=?", (pid,))
+        c.execute("DELETE FROM plant_tanks WHERE plant_id=?", (pid,))
+        drop_photo(foto)
+    c.commit()
+    c.close()
+    return len(rows)
+
+
+def backup_watch():
+    """Elke nacht (vanaf 03:00) één backup, 7 bewaren. Fouten alleen naar de console."""
+    while True:
+        nu = datetime.now()
+        dest = os.path.join(BACKUPS, f"aquarium-{nu:%Y%m%d}.zip")
+        if nu.hour >= 3 and not os.path.exists(dest):
+            try:
+                os.makedirs(BACKUPS, exist_ok=True)
+                maak_backup(dest)
+                ruim_backups_op()
+                ruim_verwijderd_op()
+            except Exception as e:
+                print("Backup mislukt:", e, flush=True)
+        time.sleep(300)
 
 
 def drop_photo(name):
@@ -945,7 +1198,17 @@ class H(BaseHTTPRequestHandler):
                 return val, False
         return "nl", False
 
-    def _redirect(self, tank=None, soort=None, msg=None):
+    def _bestand(self, fp, ctype, naam):
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Disposition", f'attachment; filename="{naam}"')
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(os.path.getsize(fp)))
+        self.end_headers()
+        with open(fp, "rb") as f:
+            shutil.copyfileobj(f, self.wfile)
+
+    def _redirect(self, tank=None, soort=None, msg=None, undo=None):
         q = []
         if tank:
             q.append(f"tank={tank}")
@@ -953,6 +1216,8 @@ class H(BaseHTTPRequestHandler):
             q.append("soort=vis")
         if msg:
             q.append("msg=" + quote(msg))
+        if undo:
+            q.append("undo=" + str(undo))
         self.send_response(303)
         self.send_header("Location", "/?" + "&".join(q) if q else "/")
         self.end_headers()
@@ -980,6 +1245,60 @@ class H(BaseHTTPRequestHandler):
                     self.wfile.write(f.read())
                 return
         q = parse_qs(u.query)
+        if path == "/backup.zip":
+            tmp = os.path.join(DATA, f".dl-{int(time.time()*1000)}.zip")
+            try:
+                maak_backup(tmp)
+                self._bestand(tmp, "application/zip",
+                              f"aquarium-backup-{date.today().isoformat()}.zip")
+            except Exception as e:
+                self.send_error(500, f"backup mislukt: {e}")
+            finally:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            return
+        if path == "/export.csv":
+            try:
+                tank = int((q.get("tank") or ["0"])[0])
+            except ValueError:
+                tank = 0
+            c = db()
+            rows = c.execute(
+                "SELECT p.id,p.naam,p.soort,p.plaats,p.land,p.van_wie,p.link,p.foto,"
+                "group_concat(a.naam,' | ') FROM plants p "
+                "LEFT JOIN plant_tanks pt ON pt.plant_id=p.id "
+                "LEFT JOIN aquaria a ON a.id=pt.tank_id "
+                "WHERE p.verwijderd IS NULL "
+                + ("AND EXISTS(SELECT 1 FROM plant_tanks x WHERE x.plant_id=p.id "
+                   "AND x.tank_id=?) " if tank else "")
+                + "GROUP BY p.id ORDER BY p.naam", (tank,) if tank else ()).fetchall()
+            c.close()
+            out = io.StringIO()
+            w = csv.writer(out, delimiter=";", lineterminator="\r\n")
+            w.writerow(["id", "naam/name", "soort/kind", "plaats/position", "land/country",
+                        "van_wie/from", "link", "foto/photo", "aquaria"])
+            for r in rows:
+                w.writerow(["" if v is None else v for v in r])
+            body = ("\ufeff" + out.getvalue()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="aquarium.csv"')
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/restore":
+            c = db()
+            pid = (q.get("id") or [""])[0]
+            c.execute("UPDATE plants SET verwijderd=NULL WHERE id=?", (pid,))
+            c.commit()
+            tank = c.execute("SELECT tank_id FROM plant_tanks WHERE plant_id=? "
+                             "ORDER BY tank_id LIMIT 1", (pid,)).fetchone()
+            c.close()
+            return self._redirect(tank and tank[0], None, "Ongedaan gemaakt")
         if path == "/lookup":
             naam = (q.get("naam", [""])[0]).strip()
             url = (q.get("url", [""])[0]).strip()
@@ -1024,7 +1343,7 @@ class H(BaseHTTPRequestHandler):
             per = PER_PAGE
         lang, lang_nieuw = self._lang()
         body = page(c, tank, q.get("soort", ["plant"])[0], q.get("msg", [""])[0],
-                    pageno, per, "perSet" in q, lang).encode()
+                    pageno, per, "perSet" in q, lang, q.get("undo", [""])[0]).encode()
         c.close()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1062,6 +1381,15 @@ class H(BaseHTTPRequestHandler):
                 msg = "Opslaan mislukt"
             self._redirect(g("tank") or None, g("soort"), msg)
             return
+
+        if path == "/tank_settings":
+            for (i,) in c.execute("SELECT id FROM aquaria").fetchall():
+                li, w = num(g(f"liters_{i}")), num(g(f"pct_{i}"))
+                c.execute("UPDATE aquaria SET liters=?,wissel_pct=? WHERE id=?",
+                          (li if li and li > 0 else None,
+                           w if w and 0 < w <= 100 else None, i))
+            c.commit()
+            return c.close() or self._redirect(g("tank") or None, g("soort"), "Opgeslagen")
 
         if path == "/add":
             naam = g("naam")
@@ -1111,12 +1439,11 @@ class H(BaseHTTPRequestHandler):
             old = c.execute("SELECT foto,soort FROM plants WHERE id=?", (pid,)).fetchone()
             tank = c.execute("SELECT tank_id FROM plant_tanks WHERE plant_id=? "
                              "ORDER BY tank_id LIMIT 1", (pid,)).fetchone()
-            c.execute("DELETE FROM plants WHERE id=?", (pid,))
-            c.execute("DELETE FROM plant_tanks WHERE plant_id=?", (pid,))
+            c.execute("UPDATE plants SET verwijderd=? WHERE id=?",
+                      (datetime.now().isoformat(timespec="seconds"), pid))
             c.commit()
-            if old and old[0]:
-                drop_photo(old[0])
-            return c.close() or self._redirect(tank and tank[0], old and old[1], "Verwijderd")
+            return c.close() or self._redirect(tank and tank[0], old and old[1],
+                                               "Verwijderd", pid)
         if path == "/add_tank":
             if g("naam"):
                 c.execute("INSERT INTO aquaria(naam) VALUES(?)", (g("naam"),))
@@ -1175,6 +1502,8 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     db().close()
     threading.Thread(target=taken_watch, daemon=True).start()
+    threading.Thread(target=backup_watch, daemon=True).start()
+    threading.Thread(target=update_watch, daemon=True).start()
     url = f"http://localhost:{PORT}"
     print(f"Planten op {url}", flush=True)
     print(f"Data in {DATA}", flush=True)

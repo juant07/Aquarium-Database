@@ -9,3 +9,8 @@ photos/
 __pycache__/
 .digest_sent
 AGENTS.md
+backups/
+sites.json
+.latest_version
+.vacuum-*
+.dl-*

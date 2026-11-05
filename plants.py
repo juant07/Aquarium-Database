@@ -15,7 +15,7 @@ PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
 BACKUPS = os.path.join(DATA, "backups")
 UPDATE_CFG = os.path.join(DATA, ".latest_version")
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 

@@ -41,6 +41,21 @@ Met de twee dropdowns boven de lijst filter je op plaats in de bak en op land.
 Het filter geldt voor je hele lijst (ook de pagina's die je niet ziet).
 Kies "wis filter" om alles weer te tonen.
 
+AANTAL, KOSTEN, LOGBOEK EN APPARATUUR
+-------------------------------------
+Vul per plant/vis het aantal en de prijs per stuk in (aankoop en eventueel
+verkocht). De bak toont hoeveel je betaald en ontvangen hebt. Bedragen uit het
+logboek tellen mee: type "verkoop" is opbrengst, alle andere types zijn kosten.
+
+In het logboek noteer je wat er gebeurt: aankoop, verkoop, sterfte, snoeien,
+waterwissel, schoonmaak of overig, met datum, omschrijving en bedrag.
+
+Bij "Apparatuur" houd je filters, pompen, verlichting en verwarming bij:
+naam, merk/type, aantal, vermogen (W), aankoopdatum en een notitie.
+
+Onder de metingen staan statistieken (min, gemiddelde, max) over 30, 90 of
+365 dagen.
+
 BACKUP, EXPORT EN HERSTELLEN
 ----------------------------
 Onder "Instellingen: zoeksites" (bovenaan) staan ook:
@@ -255,6 +270,21 @@ FILTERING
 Use the two dropdowns above the list to filter by position in the tank and by
 country. The filter applies to your whole list (including pages you cannot see).
 Choose "clear filter" to show everything again.
+
+QUANTITY, COSTS, LOG AND EQUIPMENT
+----------------------------------
+Enter the quantity and the price each per plant/fish (purchase and, if sold,
+sale price). The tank shows how much you paid and received. Amounts from the
+log count too: type "sale" is income, all other types are costs.
+
+Use the log to note what happens: purchase, sale, death, pruning, water change,
+cleaning or other, with date, description and amount.
+
+Under "Equipment" you keep track of filters, pumps, lighting and heaters:
+name, brand/type, quantity, power (W), purchase date and a note.
+
+Below the measurements you find statistics (min, average, max) over 30, 90 or
+365 days.
 
 BACKUP, EXPORT AND RESTORE
 --------------------------

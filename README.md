@@ -21,6 +21,11 @@ Broncode: <https://github.com/juant07/Aquarium-Database>
 - Planten en vissen met foto, link, plaats in de bak, herkomst en "bij wie gehaald".
 - Filteren op **plaats in de bak** en **land** met dropdowns, over je hele lijst
   (niet alleen de zichtbare pagina).
+- Aantal per plant/vis en aankoop-/verkoopprijs per stuk; de bak toont betaald,
+  ontvangen en saldo (inclusief bedragen uit het logboek).
+- Logboek met gebeurtenissen (aankoop, verkoop, sterfte, snoeien, waterwissel, schoonmaak,
+  overig) en een apparatuurlijst (merk, aantal, vermogen, aankoopdatum, notitie).
+- Statistieken met min/gemiddelde/max over 30, 90 of 365 dagen.
 - Water-inspecties (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) met mini-grafiekjes van het verloop.
 - Onderhoudstaken met interval en een dagelijkse push/herinnering; waterwissel-taken tonen
   meteen hoeveel liter dat is bij het ingestelde volume en percentage.
@@ -165,6 +170,11 @@ Source: <https://github.com/juant07/Aquarium-Database>
 - Plants and fish with photo, link, position in the tank, origin and "bought from".
 - Filter by **position in the tank** and **country** with dropdowns, across your whole
   list (not just the visible page).
+- Quantity per plant/fish and purchase/sale price each; the tank shows paid, received and
+  balance (including amounts from the log).
+- Log of events (purchase, sale, death, pruning, water change, cleaning, other) and an
+  equipment list (brand, quantity, power, purchase date, note).
+- Statistics with min/average/max over 30, 90 or 365 days.
 - Water inspections (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) with mini trend charts.
 - Maintenance tasks with an interval and a daily push reminder; water-change tasks show
   the litres for the configured tank volume and percentage.

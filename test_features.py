@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Zelftest voor backup, grafieken, versie-check en soft-delete — run: python3 test_features.py"""
 import json, os, re, sqlite3, tempfile, zipfile
+from datetime import date, timedelta
 from html.parser import HTMLParser
 
 import plants
@@ -95,15 +96,38 @@ fa = c.execute("SELECT last_insert_rowid()").fetchone()[0]
 c.execute("INSERT INTO plants(naam,soort,plaats,land) VALUES('FilterB','plant','bodem','Peru')")
 fb = c.execute("SELECT last_insert_rowid()").fetchone()[0]
 c.executemany("INSERT INTO plant_tanks(plant_id,tank_id) VALUES(?,?)", [(fa, tid), (fb, tid)])
+c.execute("UPDATE plants SET aantal=2,prijs=10.5,verkocht_prijs=15 WHERE id=?", (fa,))
+today = date.today().isoformat()
+c.execute("INSERT INTO logboek(tank_id,datum,type,omschrijving,bedrag) VALUES(?,?,?,?,?)",
+          (tid, today, "aankoop", "voer", 5))
+c.execute("INSERT INTO logboek(tank_id,datum,type,omschrijving,bedrag) VALUES(?,?,?,?,?)",
+          (tid, today, "verkoop", "stekken", 20))
+c.execute("INSERT INTO apparatuur(tank_id,naam,merk,aantal,vermogen,aankoopdatum,notitie) "
+          "VALUES(?,?,?,?,?,?,?)", (tid, "Filter", "Eheim", 1, 12, today, "schoonmaken"))
+c.execute("INSERT INTO inspecties(tank_id,datum,temp,ph,no2) VALUES(?,?,?,?,?)",
+          (tid, today, 24, 7.0, 0.1))
+c.execute("INSERT INTO inspecties(tank_id,datum,temp,ph,no2) VALUES(?,?,?,?,?)",
+          (tid, today, 26, 7.4, 0.3))
+c.execute("INSERT INTO inspecties(tank_id,datum,temp,ph,no2) VALUES(?,?,?,?,?)",
+          (tid, (date.today() - timedelta(days=200)).isoformat(), 10, 6.0, 9.0))
 c.commit()
+st = plants.statistieken(c, tid, 90)
+temp = [r for r in st if r[0] == "Temp"][0]
+assert temp[1] == 24 and temp[3] == 26 and abs(temp[2] - 25) < 1e-9, temp
+assert all(r[1] != 10 for r in st), "meting buiten periode telt mee"
 html_ = plants.page(c, tid, "plant")
 filt = plants.page(c, tid, "plant", plaats="midden")
 filt_en = plants.page(c, tid, "plant", land="Peru", lang="en")
+stats_30 = plants.page(c, tid, "plant", stats=30)
 c.close()
 assert 'FilterA' in filt and 'FilterB' not in filt, "plaatsfilter werkt niet"
 assert '<option selected>midden</option>' in filt, "dropdown bewaart keuze niet"
 assert 'FilterB' in filt_en and 'FilterA' not in filt_en, "landfilter werkt niet"
 assert 'FilterB' in filt_en and 'alle landen' not in filt_en and 'all countries' in filt_en
+assert 'Betaald: € 26,00' in html_ and 'Ontvangen: € 50,00' in html_, "kosten/baten kloppen niet"
+assert 'voer' in html_ and 'stekken' in html_ and 'Filter' in html_ and 'Eheim' in html_
+assert 'Statistieken' in html_ and '25.00' in html_ and 'stats=30' in html_
+assert 'Statistieken' in stats_30 and '30 dagen' in stats_30
 assert 'value="150"' in html_ and 'value="25"' in html_, "tankvelden niet gequote"
 assert not re.search(r'value="[^"]*[<>]', html_), "value-attribuut loopt door in de tag"
 assert 'name=liters_' in html_ and 'name=pct_' in html_

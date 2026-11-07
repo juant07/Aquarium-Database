@@ -15,7 +15,7 @@ PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
 BACKUPS = os.path.join(DATA, "backups")
 UPDATE_CFG = os.path.join(DATA, ".latest_version")
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 
@@ -146,6 +146,11 @@ def db():
     if "soort" not in {r[1] for r in c.execute("PRAGMA table_info(plants)")}:
         c.execute("ALTER TABLE plants ADD COLUMN soort TEXT DEFAULT 'plant'")
         c.execute("UPDATE plants SET soort='plant' WHERE soort IS NULL")
+    pcols = {r[1] for r in c.execute("PRAGMA table_info(plants)")}
+    for col, typ in (("aantal", "INTEGER DEFAULT 1"), ("prijs", "REAL"),
+                     ("verkocht_prijs", "REAL")):
+        if col not in pcols:
+            c.execute(f"ALTER TABLE plants ADD COLUMN {col} {typ}")
     c.execute("CREATE TABLE IF NOT EXISTS plant_tanks(plant_id INTEGER, tank_id INTEGER)")
     if not c.execute("SELECT 1 FROM plant_tanks LIMIT 1").fetchone():
         c.execute("INSERT INTO plant_tanks(plant_id,tank_id) "
@@ -167,6 +172,12 @@ def db():
     c.execute("""CREATE TABLE IF NOT EXISTS taken(
         id INTEGER PRIMARY KEY, tank_id INTEGER, titel TEXT,
         interval_dagen INTEGER, laatst_gedaan TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS logboek(
+        id INTEGER PRIMARY KEY, tank_id INTEGER, datum TEXT,
+        type TEXT, omschrijving TEXT, bedrag REAL)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS apparatuur(
+        id INTEGER PRIMARY KEY, tank_id INTEGER, naam TEXT, merk TEXT,
+        aantal INTEGER, vermogen REAL, aankoopdatum TEXT, notitie TEXT)""")
     if not c.execute("SELECT 1 FROM aquaria LIMIT 1").fetchone():
         c.execute("INSERT INTO aquaria(naam) VALUES('Aquarium')")
     c.commit()
@@ -179,6 +190,32 @@ def num(v):
         return float(v)
     except ValueError:
         return None
+
+
+LOGTYPES = ("aankoop", "verkoop", "sterfte", "snoeien", "waterwissel", "schoonmaak", "overig")
+LOGTYPE_EN = {"aankoop": "purchase", "verkoop": "sale", "sterfte": "death", "snoeien": "pruning",
+              "waterwissel": "water change", "schoonmaak": "cleaning", "overig": "other"}
+
+
+def loglabel(code, lang):
+    return LOGTYPE_EN.get(code, code) if lang == "en" else code
+
+
+def geld(x, lang="nl"):
+    s = f"{x:.2f}"
+    return "€ " + (s.replace(".", ",") if lang == "nl" else s)
+
+
+def statistieken(c, tank, dagen):
+    vanaf = (date.today() - timedelta(days=dagen)).isoformat()
+    rows = c.execute("SELECT gh,kh,temp,ph,no2,no3,po4 FROM inspecties "
+                     "WHERE tank_id=? AND datum>=? ORDER BY datum", (tank, vanaf)).fetchall()
+    out = []
+    for idx, lab in enumerate(("GH", "KH", "Temp", "pH", "NO₂", "NO₃", "PO₄")):
+        vals = [r[idx] for r in rows if r[idx] is not None]
+        if vals:
+            out.append((lab, min(vals), sum(vals) / len(vals), max(vals)))
+    return out
 
 
 PAGE = """<!doctype html><meta charset=utf-8>
@@ -255,6 +292,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 .per{display:flex;align-items:center;gap:.4rem;font-size:.85rem;color:#9ab;margin:0 0 .8rem}
 .per a{padding:.2rem .6rem;border-radius:6px;background:#1d3a52;color:#9ab;text-decoration:none}
 .per a.on{background:#2a6f9e;color:#fff;font-weight:600}
+.kosten{color:#bcd;font-size:.9rem;margin:.2rem 0 .6rem}
 .lang{float:right;font-weight:400;font-size:.85rem;margin-top:.2rem}
 .lang a{color:#9ab;text-decoration:none;padding:0 .15rem}
 .lang a.on{color:#fff;font-weight:600}
@@ -288,6 +326,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 
 <div class=tabs>@@SECTABS@@</div>
 <h2>@@SECTNAAM@@</h2>
+@@KOSTEN@@
 <form method=post action=/add enctype=multipart/form-data id=add>
 <input type=hidden name=soort value=@@SOORT@@>
 <div class=row>
@@ -299,6 +338,9 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label class=grow>Plaats in bak<input type=text name=plaats placeholder="@@PLAATS@@"></label>
 <label class=grow>Land / herkomst<input type=text name=land></label>
 <label class=grow>Bij wie gehaald<input type=text name=van_wie></label>
+<label>Aantal<input type=number name=aantal min=0 value=1 style="width:5rem"></label>
+<label>Prijs (per stuk)<input type=number name=prijs step=0.01 min=0 placeholder="€"></label>
+<label>Verkocht (per stuk)<input type=number name=verkocht_prijs step=0.01 min=0 placeholder="€"></label>
 <label>Foto<input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false;verklein(this)"></label>
 <button>Toevoegen</button>
 </div>
@@ -332,6 +374,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 </div>
 </form>
 @@GRAFIEK@@
+@@STATS@@
 @@INSP@@
 
 <h2>Onderhoudstaken</h2>
@@ -345,6 +388,34 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 </div>
 </form>
 @@TAKEN@@
+<h2>Logboek</h2>
+<form class=mini method=post action=/add_log>
+<input type=hidden name=tank_id value=@@TID@@>
+<input type=hidden name=soort value=@@SOORT@@>
+<div class=row>
+<label>Datum<input type=date name=datum value=@@DATUM@@ required></label>
+<label>Type<select name=type>@@LOGTYPES@@</select></label>
+<label class=grow>Omschrijving<input type=text name=omschrijving></label>
+<label>Bedrag (kosten; bij verkoop opbrengst)<input type=number step=0.01 name=bedrag placeholder="€"></label>
+<button>Toevoegen</button>
+</div>
+</form>
+@@LOGBOEK@@
+<h2>Apparatuur</h2>
+<form class=mini method=post action=/add_app>
+<input type=hidden name=tank_id value=@@TID@@>
+<input type=hidden name=soort value=@@SOORT@@>
+<div class=row>
+<label class=grow>Naam<input type=text name=naam required></label>
+<label>Merk/type<input type=text name=merk></label>
+<label>Aantal<input type=number name=aantal min=0 value=1 style="width:5rem"></label>
+<label>Vermogen (W)<input type=number step=1 min=0 name=vermogen style="width:6rem"></label>
+<label>Aankoopdatum<input type=date name=aankoopdatum></label>
+<label class=grow>Notitie<input type=text name=notitie></label>
+<button>Toevoegen</button>
+</div>
+</form>
+@@APPARATUUR@@
 <p class=voet>@@VOET@@</p>
 <div id=lightbox><img alt=""></div>
 <script>
@@ -437,7 +508,8 @@ CARD = """<div class=card>
 {img}
 <b>{naam}</b>
  <span class=p-plaats>{plaats}</span><span class=p-land>{land}</span><span>{van_wie}</span>
-<span class=p-link>{link}</span>
+ <span class=p-aantal>{aantal}</span>
+ <span class=p-link>{link}</span>
 <form class=edit method=post action=/edit enctype=multipart/form-data>
 <input type=hidden name=id value={id}>
 <input type=hidden name=soort value="{soort}">
@@ -448,6 +520,9 @@ CARD = """<div class=card>
 <label>Plaats</label><input type=text name=plaats value="{plaats_e}">
 <label>Land</label><input type=text name=land value="{land_e}">
 <label>Bij wie</label><input type=text name=van_wie value="{van_wie_e}">
+<label>Aantal</label><input type=number name=aantal min=0 value={aantal}>
+<label>Prijs (per stuk)</label><input type=number step=0.01 min=0 name=prijs value="{prijs_e}">
+<label>Verkocht (per stuk)</label><input type=number step=0.01 min=0 name=verkocht_prijs value="{verkocht_e}">
 <label>Aquarium(en)</label><div class=checks>{tankchecks}</div>
 <label>Nieuwe foto</label><input type=file name=foto accept=image/* onchange="this.form.use_lookup.checked=false;verklein(this)">
 <input type=hidden name=lookup_foto>
@@ -470,6 +545,17 @@ INSP_ROW = """<tr><td>{datum}</td><td>{gh}</td><td>{kh}</td><td>{temp}</td><td>{
 
 # --- taal (nl/en): vaste template-teksten worden hieronder 1x vertaald ---
 EN_REPL = [
+    ("Prijs (per stuk)", "Price (each)"),
+    ("Verkocht (per stuk)", "Sold (each)"),
+    ("Bedrag (kosten; bij verkoop opbrengst)", "Amount (cost; for a sale, income)"),
+    ("Aankoopdatum", "Purchase date"),
+    ("Omschrijving", "Description"),
+    ("Merk/type", "Brand/type"),
+    ("Vermogen (W)", "Power (W)"),
+    ("Aantal", "Quantity"),
+    ("Notitie", "Note"),
+    ("Logboek", "Log"),
+    ("Apparatuur", "Equipment"),
     ("Plaats in bak", "Position in tank"),
     ("Land / herkomst", "Country / origin"),
     ("Bij wie gehaald", "Bought from"),
@@ -547,6 +633,13 @@ T = {
         "undo": "Ongedaan maken",
         "all_places": "alle plaatsen", "all_countries": "alle landen",
         "clear_filter": "wis filter",
+        "costs": "Betaald", "income": "Ontvangen", "balance": "Saldo",
+        "logbook": "Logboek", "equipment": "Apparatuur",
+        "no_entries": "nog geen gebeurtenissen", "no_equipment": "nog geen apparatuur",
+        "amount": "Bedrag", "brand": "Merk/type", "power": "Vermogen (W)",
+        "purchase_date": "Aankoopdatum", "note": "Notitie",
+        "stats": "Statistieken", "min": "Min", "avg": "Gem.", "max": "Max",
+        "days": "dagen", "period": "Periode",
         "version": "versie", "newer_available": "nieuwer beschikbaar:",
     },
     "en": {
@@ -573,6 +666,13 @@ T = {
         "undo": "Undo",
         "all_places": "all positions", "all_countries": "all countries",
         "clear_filter": "clear filter",
+        "costs": "Paid", "income": "Received", "balance": "Balance",
+        "logbook": "Log", "equipment": "Equipment",
+        "no_entries": "no events yet", "no_equipment": "no equipment yet",
+        "amount": "Amount", "brand": "Brand/type", "power": "Power (W)",
+        "purchase_date": "Purchase date", "note": "Note",
+        "stats": "Statistics", "min": "Min", "avg": "Avg.", "max": "Max",
+        "days": "days", "period": "Period",
         "version": "version", "newer_available": "newer available:",
     },
 }
@@ -625,7 +725,7 @@ MEET_DAGEN = 14   # na zoveel dagen zonder meting: badge + digest-melding
 
 
 def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False,
-         lang="nl", undo=None, plaats="", land=""):
+         lang="nl", undo=None, plaats="", land="", stats=90):
     lang = lang if lang in T else "nl"
     t = lambda k: T[lang][k]
     tpl_page, tpl_card, tpl_insp = TPL[lang]
@@ -652,7 +752,8 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         for i, n, _, _ in tanks)
 
     rows = c.execute(
-        "SELECT DISTINCT p.id,p.naam,p.link,p.plaats,p.land,p.van_wie,p.foto "
+        "SELECT DISTINCT p.id,p.naam,p.link,p.plaats,p.land,p.van_wie,p.foto,"
+        "p.aantal,p.prijs,p.verkocht_prijs "
         "FROM plants p JOIN plant_tanks pt ON pt.plant_id=p.id "
         "WHERE pt.tank_id=? AND p.soort=? AND p.verwijderd IS NULL"
         + (" AND p.plaats=?" if plaats else "")
@@ -684,7 +785,7 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     pageno = min(max(1, pageno), npages)
     rows = rows[(pageno - 1) * per:pageno * per]
     cards = []
-    for pid, naam, link, plaats, land, van_wie, foto in rows:
+    for pid, naam, link, plaats, land, van_wie, foto, aantal, prijs, verkocht in rows:
         naam = naam or ""
         img = f'<img src="/photos/{html.escape(foto)}" alt="">' if foto else "<img alt=''>"
         linkhtml = ""
@@ -698,11 +799,14 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
             else:
                 linkhtml = f"<span>{html.escape(link[:100])}</span>"
         e = lambda s: html.escape(s or "", quote=True)
+        n = lambda x: "" if x is None else f"{x:g}"
         cards.append(tpl_card.format(
             id=pid, soort=soort, img=img, naam=html.escape(naam), plaats=html.escape(plaats or ""),
             land=html.escape(land or ""), van_wie=html.escape(van_wie or ""),
+            aantal=("" if not aantal or aantal == 1 else f"×{int(aantal)}"),
             link=linkhtml, naam_e=e(naam), link_e=e(link), plaats_e=e(plaats),
-            land_e=e(land), van_wie_e=e(van_wie), tankchecks=checks(links.get(pid, set()))))
+            land_e=e(land), van_wie_e=e(van_wie), prijs_e=e(n(prijs)), verkocht_e=e(n(verkocht)),
+            tankchecks=checks(links.get(pid, set()))))
     cards_html = "\n".join(cards) or (
         f'<p class=empty>{t("empty_fish" if soort == "vis" else "empty_plant")}</p>')
     ps = "&perSet=1" if per_set else ""
@@ -820,6 +924,77 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     if not taken_html:
         taken_html.append(f"<small style=color:#9ab>{t('no_tasks')}</small>")
 
+    betaald, ontvangen = c.execute(
+        "SELECT COALESCE(SUM(COALESCE(p.prijs,0)*COALESCE(p.aantal,1)),0),"
+        "COALESCE(SUM(COALESCE(p.verkocht_prijs,0)*COALESCE(p.aantal,1)),0) "
+        "FROM plants p WHERE p.id IN (SELECT plant_id FROM plant_tanks WHERE tank_id=?) "
+        "AND p.soort=? AND p.verwijderd IS NULL",
+        (tid, soort)).fetchone()
+    for typ, bedrag in c.execute("SELECT type,COALESCE(SUM(bedrag),0) FROM logboek "
+                                 "WHERE tank_id=? GROUP BY type", (tid,)):
+        if typ == "verkoop":
+            ontvangen += bedrag
+        else:
+            betaald += bedrag
+    kosten_html = ""
+    if betaald or ontvangen:
+        kosten_html = (f'<p class=kosten>{t("costs")}: {geld(betaald, lang)} &middot; '
+                       f'{t("income")}: {geld(ontvangen, lang)} &middot; '
+                       f'{t("balance")}: {geld(ontvangen - betaald, lang)}</p>')
+
+    logtypes_html = "".join(f'<option value={k}>{html.escape(loglabel(k, lang))}</option>'
+                            for k in LOGTYPES)
+    logs = c.execute("SELECT id,datum,type,omschrijving,bedrag FROM logboek "
+                     "WHERE tank_id=? ORDER BY datum DESC,id DESC LIMIT 20", (tid,)).fetchall()
+    log_html = []
+    for lid, datum, typ, oms, bedrag in logs:
+        bedrag = f' &middot; {geld(bedrag, lang)}' if bedrag else ""
+        log_html.append(
+            f'<div class=taak><span class=t><b>{html.escape(loglabel(typ or "", lang))}</b> '
+            f'{html.escape(datum or "")} <small>{html.escape(oms or "")}{bedrag}</small></span>'
+            f'<form method=post action=/del_log><input type=hidden name=id value={lid}>'
+            f'<input type=hidden name=tank_id value={tid}>'
+            f'<input type=hidden name=soort value={soort}>'
+            f'<button class=danger>&times;</button></form></div>')
+    log_html = "\n".join(log_html) or f"<small style=color:#9ab>{t('no_entries')}</small>"
+
+    app = c.execute("SELECT id,naam,merk,aantal,vermogen,aankoopdatum,notitie FROM apparatuur "
+                    "WHERE tank_id=? ORDER BY naam", (tid,)).fetchall()
+    app_html = []
+    for aid, naam, merk, aant, verm, dat, notitie in app:
+        delen = [html.escape(naam or "")]
+        if merk:
+            delen.append(html.escape(merk))
+        if aant and aant != 1:
+            delen.append(f"×{int(aant)}")
+        if verm:
+            delen.append(f"{verm:g} W")
+        if dat:
+            delen.append(html.escape(dat))
+        if notitie:
+            delen.append(f"<small>{html.escape(notitie)}</small>")
+        app_html.append(
+            f'<div class=taak><span class=t>{" &middot; ".join(delen)}</span>'
+            f'<form method=post action=/del_app><input type=hidden name=id value={aid}>'
+            f'<input type=hidden name=tank_id value={tid}>'
+            f'<input type=hidden name=soort value={soort}>'
+            f'<button class=danger>&times;</button></form></div>')
+    app_html = "\n".join(app_html) or f"<small style=color:#9ab>{t('no_equipment')}</small>"
+
+    stats = stats if stats in (30, 90, 365) else 90
+    stats_rows = statistieken(c, tid, stats)
+    stats_html = ""
+    if stats_rows:
+        periode = " ".join(
+            f'<a href="/?tank={tid}{qs}&stats={n}{fq}"{" class=on" if n == stats else ""}>'
+            f'{n} {t("days")}</a>' for n in (30, 90, 365))
+        stats_html = (f'<div class=per>{t("stats")} &middot; {t("period")}: {periode}</div>'
+                      f'<table><tr><th>Parameter</th><th>{t("min")}</th><th>{t("avg")}</th>'
+                      f'<th>{t("max")}</th></tr>'
+                      + "".join(f'<tr><td>{lab}</td><td>{mn:g}</td><td>{gem:.2f}</td>'
+                                f'<td>{mx:g}</td></tr>'
+                                for lab, mn, gem, mx in stats_rows) + '</table>')
+
     # ponytail: geen str.format (CSS-braces) — vervang vaste placeholders; content kan geen @@..@@ zijn
     out = tpl_page
     for k, v in (("@@NAAM@@", html.escape(tnaam) + (f" &middot; {tliter:g} L" if tliter else "")),
@@ -844,11 +1019,16 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
                  ("@@URL_AQ@@", html.escape(bron_urls["aquainfo"], quote=True)),
                  ("@@URL_FG@@", html.escape(bron_urls["flowgrow"], quote=True)),
                  ("@@TANKVELDEN@@", tankvelden),
+                 ("@@KOSTEN@@", kosten_html),
                  ("@@VOET@@", voet),
                  ("@@MEETBADGE@@", meetbadge),
                  ("@@GRAFIEK@@", grafiek),
+                 ("@@STATS@@", stats_html),
                  ("@@INSP@@", "\n".join(insp_html)),
-                 ("@@TAKEN@@", "\n".join(taken_html))):
+                 ("@@TAKEN@@", "\n".join(taken_html)),
+                 ("@@LOGTYPES@@", logtypes_html),
+                 ("@@LOGBOEK@@", log_html),
+                 ("@@APPARATUUR@@", app_html)):
         out = out.replace(k, v)
     return out
 
@@ -1300,7 +1480,7 @@ class H(BaseHTTPRequestHandler):
             c = db()
             rows = c.execute(
                 "SELECT p.id,p.naam,p.soort,p.plaats,p.land,p.van_wie,p.link,p.foto,"
-                "group_concat(a.naam,' | ') FROM plants p "
+                "p.aantal,p.prijs,p.verkocht_prijs,group_concat(a.naam,' | ') FROM plants p "
                 "LEFT JOIN plant_tanks pt ON pt.plant_id=p.id "
                 "LEFT JOIN aquaria a ON a.id=pt.tank_id "
                 "WHERE p.verwijderd IS NULL "
@@ -1311,7 +1491,8 @@ class H(BaseHTTPRequestHandler):
             out = io.StringIO()
             w = csv.writer(out, delimiter=";", lineterminator="\r\n")
             w.writerow(["id", "naam/name", "soort/kind", "plaats/position", "land/country",
-                        "van_wie/from", "link", "foto/photo", "aquaria"])
+                        "van_wie/from", "link", "foto/photo", "aantal/count", "prijs/price",
+                        "verkocht/sold", "aquaria"])
             for r in rows:
                 w.writerow(["" if v is None else v for v in r])
             body = ("\ufeff" + out.getvalue()).encode()
@@ -1374,10 +1555,14 @@ class H(BaseHTTPRequestHandler):
             per = int(q.get("per", [str(PER_PAGE)])[0])
         except (ValueError, TypeError):
             per = PER_PAGE
+        try:
+            stats = int(q.get("stats", ["90"])[0])
+        except (ValueError, TypeError):
+            stats = 90
         lang, lang_nieuw = self._lang()
         body = page(c, tank, q.get("soort", ["plant"])[0], q.get("msg", [""])[0],
                     pageno, per, "perSet" in q, lang, q.get("undo", [""])[0],
-                    q.get("plaats", [""])[0], q.get("land", [""])[0]).encode()
+                    q.get("plaats", [""])[0], q.get("land", [""])[0], stats).encode()
         c.close()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1434,10 +1619,11 @@ class H(BaseHTTPRequestHandler):
                 foto = net or own
                 if net and own:
                     drop_photo(own)
-                c.execute("INSERT INTO plants(naam,link,plaats,land,van_wie,foto,soort) "
-                          "VALUES(?,?,?,?,?,?,?)",
+                c.execute("INSERT INTO plants(naam,link,plaats,land,van_wie,foto,soort,"
+                          "aantal,prijs,verkocht_prijs) VALUES(?,?,?,?,?,?,?,?,?,?)",
                           (naam, g("link"), g("plaats"), g("land"), g("van_wie"), foto,
-                           g("soort") or "plant"))
+                           g("soort") or "plant", int(num(g("aantal")) or 1),
+                           num(g("prijs")), num(g("verkocht_prijs"))))
                 pid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
                 c.executemany("INSERT INTO plant_tanks(plant_id,tank_id) VALUES(?,?)",
                               [(pid, t) for t in tids])
@@ -1451,8 +1637,10 @@ class H(BaseHTTPRequestHandler):
             old = c.execute("SELECT foto FROM plants WHERE id=?", (pid,)).fetchone()
             old_foto = old and old[0]
             foto = net or own or old_foto
-            c.execute("UPDATE plants SET naam=?,link=?,plaats=?,land=?,van_wie=?,foto=? WHERE id=?",
-                      (g("naam"), g("link"), g("plaats"), g("land"), g("van_wie"), foto, pid))
+            c.execute("UPDATE plants SET naam=?,link=?,plaats=?,land=?,van_wie=?,foto=?,"
+                      "aantal=?,prijs=?,verkocht_prijs=? WHERE id=?",
+                      (g("naam"), g("link"), g("plaats"), g("land"), g("van_wie"), foto,
+                       int(num(g("aantal")) or 1), num(g("prijs")), num(g("verkocht_prijs")), pid))
             tids = [t for t in form.getlist("tank_id") if t]
             if tids:
                 c.execute("DELETE FROM plant_tanks WHERE plant_id=?", (pid,))
@@ -1529,6 +1717,32 @@ class H(BaseHTTPRequestHandler):
             c.execute("DELETE FROM taken WHERE id=?", (kid,))
             c.commit()
             return c.close() or self._redirect(g("tank_id") or None, g("soort"), "Taak verwijderd")
+        if path == "/add_log":
+            tid = g("tank_id") or "1"
+            if g("type") in LOGTYPES:
+                c.execute("INSERT INTO logboek(tank_id,datum,type,omschrijving,bedrag) "
+                          "VALUES(?,?,?,?,?)",
+                          (tid, g("datum") or date.today().isoformat(), g("type"),
+                           g("omschrijving"), num(g("bedrag"))))
+                c.commit()
+            return c.close() or self._redirect(tid, g("soort"), "Toegevoegd")
+        if path == "/del_log":
+            c.execute("DELETE FROM logboek WHERE id=?", (g("id"),))
+            c.commit()
+            return c.close() or self._redirect(g("tank_id") or None, g("soort"), "Verwijderd")
+        if path == "/add_app":
+            tid = g("tank_id") or "1"
+            if g("naam"):
+                c.execute("INSERT INTO apparatuur(tank_id,naam,merk,aantal,vermogen,"
+                          "aankoopdatum,notitie) VALUES(?,?,?,?,?,?,?)",
+                          (tid, g("naam"), g("merk"), int(num(g("aantal")) or 1),
+                           num(g("vermogen")), g("aankoopdatum") or None, g("notitie")))
+                c.commit()
+            return c.close() or self._redirect(tid, g("soort"), "Toegevoegd")
+        if path == "/del_app":
+            c.execute("DELETE FROM apparatuur WHERE id=?", (g("id"),))
+            c.commit()
+            return c.close() or self._redirect(g("tank_id") or None, g("soort"), "Verwijderd")
         c.close()
         self._redirect(None, g("soort"))
 

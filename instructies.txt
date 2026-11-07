@@ -35,6 +35,12 @@ Kan een site niet doorzocht worden (storing, blokkade of een fout adres),
 dan probeert de app de volgende site en zie je een melding, bijvoorbeeld:
   Flowgrow: kon niet doorzocht worden (HTTP 403)
 
+FILTEREN
+--------
+Met de twee dropdowns boven de lijst filter je op plaats in de bak en op land.
+Het filter geldt voor je hele lijst (ook de pagina's die je niet ziet).
+Kies "wis filter" om alles weer te tonen.
+
 BACKUP, EXPORT EN HERSTELLEN
 ----------------------------
 Onder "Instellingen: zoeksites" (bovenaan) staan ook:
@@ -243,6 +249,12 @@ Back to the defaults: delete sites.json from the app folder.
 If a site cannot be searched (outage, block or a wrong address), the app
 tries the next site and shows a message, for example:
   Flowgrow: could not be searched (HTTP 403)
+
+FILTERING
+---------
+Use the two dropdowns above the list to filter by position in the tank and by
+country. The filter applies to your whole list (including pages you cannot see).
+Choose "clear filter" to show everything again.
 
 BACKUP, EXPORT AND RESTORE
 --------------------------

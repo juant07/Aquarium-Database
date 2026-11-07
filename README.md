@@ -19,6 +19,8 @@ Broncode: <https://github.com/juant07/Aquarium-Database>
 ### Wat het doet
 
 - Planten en vissen met foto, link, plaats in de bak, herkomst en "bij wie gehaald".
+- Filteren op **plaats in de bak** en **land** met dropdowns, over je hele lijst
+  (niet alleen de zichtbare pagina).
 - Water-inspecties (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) met mini-grafiekjes van het verloop.
 - Onderhoudstaken met interval en een dagelijkse push/herinnering; waterwissel-taken tonen
   meteen hoeveel liter dat is bij het ingestelde volume en percentage.
@@ -161,6 +163,8 @@ Source: <https://github.com/juant07/Aquarium-Database>
 ### What it does
 
 - Plants and fish with photo, link, position in the tank, origin and "bought from".
+- Filter by **position in the tank** and **country** with dropdowns, across your whole
+  list (not just the visible page).
 - Water inspections (GH, KH, temp, pH, NO₂, NO₃, PO₄, CO₂) with mini trend charts.
 - Maintenance tasks with an interval and a daily push reminder; water-change tasks show
   the litres for the configured tank volume and percentage.

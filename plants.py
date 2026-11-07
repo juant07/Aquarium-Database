@@ -15,7 +15,7 @@ PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
 BACKUPS = os.path.join(DATA, "backups")
 UPDATE_CFG = os.path.join(DATA, ".latest_version")
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 
@@ -242,6 +242,9 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 #lightbox img{max-width:92vw;max-height:92vh;border-radius:6px;box-shadow:0 0 30px #000}
 .card img{cursor:zoom-in}
 .filter{width:100%;padding:.45rem;border-radius:4px;border:1px solid #456;background:#0b2030;color:#eee;box-sizing:border-box;margin-bottom:.8rem}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.8rem;font-size:.9rem}
+.filters select{padding:.35rem;border-radius:4px;border:1px solid #456;background:#0b2030;color:#eee}
+.filters a{color:#9ab}
 .banner{background:#2a8f4a;color:#fff;padding:.5rem .8rem;border-radius:6px;margin:.4rem 0 .8rem;font-size:.9rem}
 .empty{color:#9ab;font-size:.9rem;margin:.4rem 0}
 .pager{display:flex;align-items:center;gap:.8rem;justify-content:center;margin:.9rem 0}
@@ -304,6 +307,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 <label class=netopt><input type=checkbox name=use_lookup value=1> Internetfoto gebruiken</label>
 </form>
 <input class=filter type=search placeholder="Zoek in deze lijst op naam..." oninput="filterCards(this.value)">
+@@FILTER@@
 @@PERSEL@@
 <div class=grid>@@CARDS@@</div>
 @@PAGER@@
@@ -541,6 +545,8 @@ T = {
         "measure_1": "laatste meting: gisteren",
         "measure_n": "laatste meting: {n} dagen geleden",
         "undo": "Ongedaan maken",
+        "all_places": "alle plaatsen", "all_countries": "alle landen",
+        "clear_filter": "wis filter",
         "version": "versie", "newer_available": "nieuwer beschikbaar:",
     },
     "en": {
@@ -565,6 +571,8 @@ T = {
         "measure_1": "last measurement: yesterday",
         "measure_n": "last measurement: {n} days ago",
         "undo": "Undo",
+        "all_places": "all positions", "all_countries": "all countries",
+        "clear_filter": "clear filter",
         "version": "version", "newer_available": "newer available:",
     },
 }
@@ -617,7 +625,7 @@ MEET_DAGEN = 14   # na zoveel dagen zonder meting: badge + digest-melding
 
 
 def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False,
-         lang="nl", undo=None):
+         lang="nl", undo=None, plaats="", land=""):
     lang = lang if lang in T else "nl"
     t = lambda k: T[lang][k]
     tpl_page, tpl_card, tpl_insp = TPL[lang]
@@ -646,8 +654,31 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     rows = c.execute(
         "SELECT DISTINCT p.id,p.naam,p.link,p.plaats,p.land,p.van_wie,p.foto "
         "FROM plants p JOIN plant_tanks pt ON pt.plant_id=p.id "
-        "WHERE pt.tank_id=? AND p.soort=? AND p.verwijderd IS NULL ORDER BY p.naam",
-        (tid, soort)).fetchall()
+        "WHERE pt.tank_id=? AND p.soort=? AND p.verwijderd IS NULL"
+        + (" AND p.plaats=?" if plaats else "")
+        + (" AND p.land=?" if land else "")
+        + " ORDER BY p.naam",
+        (tid, soort) + ((plaats,) if plaats else ()) + ((land,) if land else ())).fetchall()
+    keuzes = lambda kol: [r[0] for r in c.execute(
+        f"SELECT DISTINCT p.{kol} FROM plants p JOIN plant_tanks pt ON pt.plant_id=p.id "
+        f"WHERE pt.tank_id=? AND p.soort=? AND p.verwijderd IS NULL "
+        f"AND p.{kol} IS NOT NULL AND p.{kol}<>'' ORDER BY p.{kol}", (tid, soort))]
+    fq = (f"&plaats={quote(plaats)}" if plaats else "") + (f"&land={quote(land)}" if land else "")
+    sel = lambda naam, waarden, gekozen, leeg: (
+        f'<select name={naam} onchange="this.form.submit()">'
+        f'<option value="">{html.escape(leeg)}</option>'
+        + "".join(f'<option{" selected" if w == gekozen else ""}>{html.escape(w)}</option>'
+                  for w in waarden) + '</select>')
+    filter_html = (
+        '<form class=filters method=get>'
+        f'<input type=hidden name=tank value={tid}>'
+        + ('<input type=hidden name=soort value=vis>' if soort == "vis" else "")
+        + (f'<input type=hidden name=per value={per}><input type=hidden name=perSet value=1>'
+           if per_set else "")
+        + sel("plaats", keuzes("plaats"), plaats, t("all_places"))
+        + sel("land", keuzes("land"), land, t("all_countries"))
+        + (f'<a href="/?tank={tid}{qs}">{t("clear_filter")}</a>' if plaats or land else "")
+        + '</form>')
     totaal = len(rows)
     npages = max(1, (totaal + per - 1) // per)
     pageno = min(max(1, pageno), npages)
@@ -677,18 +708,18 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
     ps = "&perSet=1" if per_set else ""
     if npages > 1:
         pg = lambda n, lab, off: (f'<span class=off>{lab}</span>' if off
-                                  else f'<a href="/?tank={tid}{qs}&per={per}{ps}&p={n}">{lab}</a>')
+                                  else f'<a href="/?tank={tid}{qs}&per={per}{ps}{fq}&p={n}">{lab}</a>')
         pager = (f'<div class=pager>{pg(pageno - 1, t("prev"), pageno <= 1)}'
                  f'<span class=pgcur>{t("page")} {pageno} / {npages}</span>'
                  f'{pg(pageno + 1, t("next"), pageno >= npages)}</div>')
     else:
         pager = ""
     persel = (f'<div class=per>{t("per_page")} ' + "".join(
-        f'<a href="/?tank={tid}{qs}&per={n}&perSet=1"{" class=on" if n == per else ""}>{n}</a>'
+        f'<a href="/?tank={tid}{qs}&per={n}&perSet=1{fq}"{" class=on" if n == per else ""}>{n}</a>'
         for n in (6, 12, 24))
         + ("" if per in (6, 12, 24) else f'<span class=pgcur>{t("auto")}: {per}</span>') + '</div>')
     langsw = " ".join(
-        f'<a href="/?tank={tid}{qs}&per={per}{ps}&p={pageno}&lang={code}"'
+        f'<a href="/?tank={tid}{qs}&per={per}{ps}&p={pageno}{fq}&lang={code}"'
         f'{" class=on" if code == lang else ""}>{code.upper()}</a>'
         for code in ("nl", "en"))
     bron_urls, bron_order = sites()
@@ -804,6 +835,7 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
                  ("@@TANKCHECKS@@", checks({tid})),
                  ("@@DATUM@@", date.today().isoformat()),
                  ("@@CARDS@@", cards_html),
+                 ("@@FILTER@@", filter_html),
                  ("@@PERSEL@@", persel),
                  ("@@PAGER@@", pager),
                  ("@@MSG@@", msg_html),
@@ -1344,7 +1376,8 @@ class H(BaseHTTPRequestHandler):
             per = PER_PAGE
         lang, lang_nieuw = self._lang()
         body = page(c, tank, q.get("soort", ["plant"])[0], q.get("msg", [""])[0],
-                    pageno, per, "perSet" in q, lang, q.get("undo", [""])[0]).encode()
+                    pageno, per, "perSet" in q, lang, q.get("undo", [""])[0],
+                    q.get("plaats", [""])[0], q.get("land", [""])[0]).encode()
         c.close()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")

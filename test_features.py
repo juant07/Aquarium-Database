@@ -90,9 +90,20 @@ c = plants.db()
 c.execute("INSERT INTO aquaria(naam,liters,wissel_pct) VALUES('Testbak',150,25)")
 tid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
 c.execute("INSERT INTO plants(naam,soort) VALUES('Waterplant','plant')")
+c.execute("INSERT INTO plants(naam,soort,plaats,land) VALUES('FilterA','plant','midden','Brazilië')")
+fa = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+c.execute("INSERT INTO plants(naam,soort,plaats,land) VALUES('FilterB','plant','bodem','Peru')")
+fb = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+c.executemany("INSERT INTO plant_tanks(plant_id,tank_id) VALUES(?,?)", [(fa, tid), (fb, tid)])
 c.commit()
 html_ = plants.page(c, tid, "plant")
+filt = plants.page(c, tid, "plant", plaats="midden")
+filt_en = plants.page(c, tid, "plant", land="Peru", lang="en")
 c.close()
+assert 'FilterA' in filt and 'FilterB' not in filt, "plaatsfilter werkt niet"
+assert '<option selected>midden</option>' in filt, "dropdown bewaart keuze niet"
+assert 'FilterB' in filt_en and 'FilterA' not in filt_en, "landfilter werkt niet"
+assert 'FilterB' in filt_en and 'alle landen' not in filt_en and 'all countries' in filt_en
 assert 'value="150"' in html_ and 'value="25"' in html_, "tankvelden niet gequote"
 assert not re.search(r'value="[^"]*[<>]', html_), "value-attribuut loopt door in de tag"
 assert 'name=liters_' in html_ and 'name=pct_' in html_

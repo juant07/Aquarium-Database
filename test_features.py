@@ -128,6 +128,10 @@ assert 'Betaald: € 26,00' in html_ and 'Ontvangen: € 50,00' in html_, "koste
 assert 'voer' in html_ and 'stekken' in html_ and 'Filter' in html_ and 'Eheim' in html_
 assert 'Statistieken' in html_ and '25.00' in html_ and 'stats=30' in html_
 assert 'Statistieken' in stats_30 and '30 dagen' in stats_30
+assert 'name=aantal min=0 value=2' in html_ and '×2' in html_, "aantal niet in bewerkveld"
+assert 'value=×' not in html_, "aantal-tekst lekt in het invoerveld"
+assert 'saveAll()' in html_ and 'Alles opslaan' in html_, "bulk-opslaan-knop ontbreekt"
+assert 'Save all' in filt_en, "bulk-knop niet vertaald"
 assert 'value="150"' in html_ and 'value="25"' in html_, "tankvelden niet gequote"
 assert not re.search(r'value="[^"]*[<>]', html_), "value-attribuut loopt door in de tag"
 assert 'name=liters_' in html_ and 'name=pct_' in html_

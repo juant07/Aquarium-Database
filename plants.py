@@ -15,7 +15,7 @@ PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
 BACKUPS = os.path.join(DATA, "backups")
 UPDATE_CFG = os.path.join(DATA, ".latest_version")
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 
@@ -293,6 +293,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 .per a{padding:.2rem .6rem;border-radius:6px;background:#1d3a52;color:#9ab;text-decoration:none}
 .per a.on{background:#2a6f9e;color:#fff;font-weight:600}
 .kosten{color:#bcd;font-size:.9rem;margin:.2rem 0 .6rem}
+#saveall{margin:0 0 .8rem}
 .lang{float:right;font-weight:400;font-size:.85rem;margin-top:.2rem}
 .lang a{color:#9ab;text-decoration:none;padding:0 .15rem}
 .lang a.on{color:#fff;font-weight:600}
@@ -350,6 +351,7 @@ img.thumb{width:48px;height:34px;object-fit:cover;border-radius:3px;display:bloc
 </form>
 <input class=filter type=search placeholder="Zoek in deze lijst op naam..." oninput="filterCards(this.value)">
 @@FILTER@@
+<button type=button id=saveall onclick="saveAll()">Alles opslaan</button>
 @@PERSEL@@
 <div class=grid>@@CARDS@@</div>
 @@PAGER@@
@@ -424,6 +426,21 @@ function filterCards(q){
   document.querySelectorAll('.card').forEach(c=>{
     c.style.display=c.textContent.toLowerCase().indexOf(q)<0?'none':'';
   });
+}
+async function saveAll(){
+  const btn=document.getElementById('saveall');
+  btn.disabled=true; btn.textContent='opslaan...';
+  for(const f of document.querySelectorAll('form.edit')){
+    const fd=new FormData();
+    f.querySelectorAll('input[name],select[name]').forEach(el=>{
+      if(el.type==='file'||el.name==='use_lookup'||el.name==='lookup_foto')return;
+      if(el.type==='checkbox'&&!el.checked)return;
+      fd.append(el.name,el.value);
+    });
+    fd.append('bulk','1');
+    await fetch('/edit',{method:'POST',body:fd});
+  }
+  location.reload();
 }
 function cardPreview(form, d){
   const card=form.closest('.card');
@@ -508,7 +525,7 @@ CARD = """<div class=card>
 {img}
 <b>{naam}</b>
  <span class=p-plaats>{plaats}</span><span class=p-land>{land}</span><span>{van_wie}</span>
- <span class=p-aantal>{aantal}</span>
+ <span class=p-aantal>{aantal_txt}</span>
  <span class=p-link>{link}</span>
 <form class=edit method=post action=/edit enctype=multipart/form-data>
 <input type=hidden name=id value={id}>
@@ -599,6 +616,8 @@ EN_REPL = [
     ("<option value=nee>nee</option>", "<option value=nee>no</option>"),
     ("'vul een naam of link in'", "'enter a name or link'"),
     ("'zoeken...'", "'searching...'"),
+    ("'opslaan...'", "'saving...'"),
+    ("Alles opslaan", "Save all"),
     ("'Info gevonden'", "'info found'"),
     ("'niets gevonden'", "'nothing found'"),
     ("'link niet leesbaar – probeer een andere site of typ de naam'",
@@ -803,7 +822,8 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         cards.append(tpl_card.format(
             id=pid, soort=soort, img=img, naam=html.escape(naam), plaats=html.escape(plaats or ""),
             land=html.escape(land or ""), van_wie=html.escape(van_wie or ""),
-            aantal=("" if not aantal or aantal == 1 else f"×{int(aantal)}"),
+            aantal=aantal or 1,
+            aantal_txt=("" if not aantal or aantal == 1 else f"×{int(aantal)}"),
             link=linkhtml, naam_e=e(naam), link_e=e(link), plaats_e=e(plaats),
             land_e=e(land), van_wie_e=e(van_wie), prijs_e=e(n(prijs)), verkocht_e=e(n(verkocht)),
             tankchecks=checks(links.get(pid, set()))))
@@ -1654,6 +1674,11 @@ class H(BaseHTTPRequestHandler):
             if not tids:
                 tids = [r[0] for r in c.execute(
                     "SELECT tank_id FROM plant_tanks WHERE plant_id=? ORDER BY tank_id", (pid,))]
+            if g("bulk") == "1":
+                c.close()
+                self.send_response(204)
+                self.end_headers()
+                return
             return c.close() or self._redirect(tids[0] if tids else None, g("soort"),
                                                "Opgeslagen")
         if path == "/del":

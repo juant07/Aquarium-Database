@@ -15,7 +15,7 @@ PHOTOS = os.path.join(DATA, "photos")
 NOTIFY_CFG = os.path.join(DATA, "notify.json")
 BACKUPS = os.path.join(DATA, "backups")
 UPDATE_CFG = os.path.join(DATA, ".latest_version")
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 DIGEST = os.path.join(DATA, ".digest_sent")
 PORT = 8377
 
@@ -948,8 +948,8 @@ def page(c, tank, soort="plant", msg=None, pageno=1, per=PER_PAGE, per_set=False
         "SELECT COALESCE(SUM(COALESCE(p.prijs,0)*COALESCE(p.aantal,1)),0),"
         "COALESCE(SUM(COALESCE(p.verkocht_prijs,0)*COALESCE(p.aantal,1)),0) "
         "FROM plants p WHERE p.id IN (SELECT plant_id FROM plant_tanks WHERE tank_id=?) "
-        "AND p.soort=? AND p.verwijderd IS NULL",
-        (tid, soort)).fetchone()
+        "AND p.verwijderd IS NULL",
+        (tid,)).fetchone()
     for typ, bedrag in c.execute("SELECT type,COALESCE(SUM(bedrag),0) FROM logboek "
                                  "WHERE tank_id=? GROUP BY type", (tid,)):
         if typ == "verkoop":
